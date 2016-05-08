@@ -259,7 +259,7 @@ intersect.clustering <- function(keywords, clusters) {
             continue <<- TRUE
         } else {
             # cleanup created pseudos
-            sapply(delete.keyword, newk)
+            sapply(newk, delete.keyword)
         }
     }
 }

@@ -29,7 +29,7 @@ reldb_l <- list()
 k <- 1
 
 # for testing purposes
-# d = d[1:5000,]
+d = d[1:5000,]
 
 # length of saved relation values
 m <- 100
@@ -40,35 +40,12 @@ process_item <- function(item) {
     oldkeywords = setdiff(keywords, newkeywords)
 
     authors <- unlist(sapply(strsplit(item["AU"], ";"), trimws))
-    areas <- unlist(sapply(strsplit(tolower(item["SC"]), ";"), trimws))
-    rels <- c("publication", rep("author", length(authors)), "venue", rep("area", length(areas)))
-    relation <- rels #factor(rels, levels=c("relatedEquivalent", "broaderGeneric", "contributesTo", unique(rels)))
-    entity <- c(item["TI"], authors, tolower(item["SO"]), areas)
-    quantity <- rep(NA_integer_, length(entity))
-    year <- rep(item["PY"], length(entity))
-
-    for(i in seq_along(newkeywords)) {
-        keywordsdb[[newkeywords[i]]] <<- k
-        reldb_df[[k]] <<- data.frame(relation, entity, quantity, year, stringsAsFactors=FALSE)
-        names(reldb_df)[k] <<- newkeywords[i]
-        k <<- k + 1
-    }
-    for(i in seq_along(oldkeywords)) {
-        index <- keywordsdb[[oldkeywords[i]]]
-        reldb_df[[index]] <<- rbind(reldb_df[[index]], data.frame(relation, entity, quantity, year, stringsAsFactors=FALSE))
-    }
-}
-apply(d, 1, process_item)
-
-process_item2 <- function(item) {
-    keywords <- unique(unlist(sapply(strsplit(tolower(item[c("DE", "ID")]), ";"), trimws)))
-    newkeywords = setdiff(keywords, ls(keywordsdb))
-    oldkeywords = setdiff(keywords, newkeywords)
-
-    authors <- unlist(sapply(strsplit(item["AU"], ";"), trimws))
     areas <- unique(unlist(sapply(strsplit(tolower(item["SC"]), ";"), trimws)))
     venues <- tolower(item["SO"])
-    years <- item["PY"]
+    relation <- c("publication", rep("author", length(authors)), "venue", rep("area", length(areas)))
+    entity <- c(item["TI"], authors, venues, areas)
+    quantity <- rep(NA_integer_, length(entity))
+    years <- rep(item["PY"], length(entity))
 
     for(i in seq_along(newkeywords)) {
         keywordsdb[[newkeywords[i]]] <<- k
@@ -77,8 +54,9 @@ process_item2 <- function(item) {
         reldb_l[[k]]$author <<- authors
         reldb_l[[k]]$area <<- areas
         reldb_l[[k]]$venue <<- venues
-        reldb_l[[k]]$year <<- years
-        names(reldb)[k] <<- newkeywords[i]
+        names(reldb_l)[k] <<- newkeywords[i]
+        reldb_df[[k]] <<- data.frame(relation, entity, quantity, years, stringsAsFactors=FALSE)
+        names(reldb_df)[k] <<- newkeywords[i]
         k <<- k + 1
     }
     for(i in seq_along(oldkeywords)) {
@@ -87,7 +65,7 @@ process_item2 <- function(item) {
         reldb_l[[index]]$author <<- unique(c(reldb_l[[index]]$author, authors))
         reldb_l[[index]]$area <<- unique(c(reldb_l[[index]]$area, areas))
         reldb_l[[index]]$venue <<- unique(c(reldb_l[[index]]$venue, venues))
-        reldb_l[[index]]$year <<- c(reldb_l[[index]]$year, years)
+        reldb_df[[index]] <<- rbind(reldb_df[[index]], data.frame(relation, entity, quantity, years, stringsAsFactors=FALSE))
     }
     # for(i in seq_along(keywords)) {
     #     index <- keywordsdb[[keywords[i]]]
@@ -117,7 +95,7 @@ process_item2 <- function(item) {
     # }
 }
 
-apply(d, 1, process_item2)
+apply(d, 1, process_item)
 
 # number of keywords
 n = length(ls(keywordsdb))
@@ -157,4 +135,4 @@ for(i in seq(1,ncol(inputm)-1,by=2)) {
     inputm[, i] = inputm[, i][ind]
     inputm[, i+1] = inputm[, i+1][ind]
 }
-save('reldb_l', 'reldb_df', 'keywordsdb', 'inputm', file="input5000.Rdata")
+save('reldb_df', 'keywordsdb', 'inputm', file="input5000.Rdata")

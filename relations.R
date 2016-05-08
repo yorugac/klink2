@@ -44,9 +44,9 @@ rel.value <- function(k1, k2, rel) {
         ifelse(quantified[rel], {
             xdf <- get.reldf(k1)
             ydf <- get.reldf(k1)
-            xv <- rel.value(k1, rel, xdf)
+            xv <- rel.entity(k1, rel, xdf)
             xq <- rel.quantity(k1, rel, xdf)
-            yv <- rel.value(k2, rel, ydf)
+            yv <- rel.entity(k2, rel, ydf)
             yq <- rel.quantity(k2, rel, ydf)
             cooccur <- intersect(xv, yv)
             sum(pmin(xq[which(xv==cooccur)], yq[which(yv==cooccur)]))
@@ -89,12 +89,12 @@ sib <- function(keyword) {
 cooccur <- function(k1, k2) {
     ik1 <- keyword.index(k1)
     ik2 <- keyword.index(k2)
-    rel1 <- reldb_l[[k1]]
-    rel2 <- reldb_l[[k2]]
+    rel1 <- reldb_df[[k1]]
+    rel2 <- reldb_df[[k2]]
     v <- 0
     for(r in 1:rn) {
         rel = relations[r]
-        cooccur = rel1[[rel]] %in% rel2[[rel]]
+        cooccur = rel.entity(k1, rel, rel1) %in% rel.entity(k2, rel, rel2)
         v = v + length(which(cooccur))
     }
     v
@@ -149,6 +149,12 @@ nentities <- function(keyword) {
 npapers <- function(keyword) {
     reldf <- get.reldf(keyword)
     length(reldf[reldf$relation == "publication",]$entity)
+}
+
+# returns entity(s) for the given keyword and relation name
+rel.entity <- function(keyword, relation, reldf=NULL) {
+    if(is.null(reldf)) reldf = get.reldf(keyword)
+    reldf[reldf$relation %in% relation,]$entity
 }
 
 # returns quantity(s) for the given keyword and relation name
