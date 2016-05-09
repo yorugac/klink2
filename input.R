@@ -103,10 +103,10 @@ n = length(ls(keywordsdb))
 inputm <- matrix(0, nrow=m, ncol=n*2*rn)
 
 # O(n^2):
-for(i in seq_along(reldb)) {
+for(i in 1:length(reldb_l)) {
     cat("process ", i, "\n")
     irel = reldb_l[[i]]
-    for(j in seq_along(reldb)) {
+    for(j in 1:length(reldb_l)) {
         if(i != j) {
             jrel = reldb_l[[j]]
             for(r in 1:rn) {

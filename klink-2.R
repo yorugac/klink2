@@ -13,6 +13,7 @@ prepare.output <- function() {
     for(i in seq_along(semantic)) {
         semrel[[i]] <<- matrix(, nrow=0, ncol=2)
     }
+    names(semrel) <<- semantic
 }
 
 # I_r(x,y) conditional probability that
@@ -137,7 +138,7 @@ infer <- function(x, y) {
                 set.semantic(x, semantic[3], y))
         }
     }
-    # "relatedEquivalent"
+    # "similarityLink"
     if(length(which(smetrics > tS)) >= tre) {
         set.semantic(x, semantic[4], y)
     }
@@ -145,13 +146,14 @@ infer <- function(x, y) {
 
 # break loops for broaderGeneric
 fix.loops <- function() {
-    semrel$semantic[2] <<- delete.cycles(semrel$semantic[2])
+    if(nrow(semrel[[2]]) > 1)
+        semrel[[2]] <<- delete.cycles(semrel[[2]])
 }
 
 distance.matrix <- function(keywords) {
     distances <- matrix(0, nrow=length(keywords), ncol=length(keywords))
     for(i1 in 1:length(keywords)) {
-        for(i2 in 1:length(keywords)) {
+        for(i2 in i1:length(keywords)) {
             d <- 0
             if(i1 != i2) {
                 k1 <- keywords[i1]
@@ -164,14 +166,15 @@ distance.matrix <- function(keywords) {
             distances[i2,i1] = d
         }
     }
-    keywords
+    distances
 }
 
 # merge i and j in clusters
 merge.cluster <- function(clusters, i, j) {
     ncl <- c(clusters[[i]], clusters[[j]])
     clusters[[i]] = ncl
-    clusters[-j]
+    clusters = clusters[-j]
+    clusters
 }
 
 # mergeSimilarKeywords
@@ -184,18 +187,20 @@ similar <- function() {
         d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
         for(i in seq_along(clusters)) {
             for(j in seq_along(clusters)) {
-                p1 <- clusters[[i]]
-                p2 <- clusters[[j]]
-                d[i,j] = sum(distances[as.matrix(expand.grid(p1,p2))])
+                if(i != j) {
+                    p1 <- which(keywords %in% clusters[[i]])
+                    p2 <- which(keywords %in% clusters[[j]])
+                    d[i,j] = sum(distances[as.matrix(expand.grid(p1,p2))])
+                }
             }
         }
         d
     }
     d <- distances
-    for(level in 1:mt) {
-        i <- which(d==min(d), arr.ind=T)
+    while(length(clusters) >= mt) {
+        i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         clusters = merge.cluster(clusters, i[1], i[2])
-        d = update.dist(clusters)
+        if(length(clusters) > mt) d = update.dist(clusters)
     }
     for(cl in clusters) {
         for(i in cl)
@@ -223,17 +228,19 @@ quick.clustering <- function(keywords) {
         d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
         for(i in seq_along(clusters)) {
             for(j in seq_along(clusters)) {
-                p1 <- clusters[[i]]
-                p2 <- clusters[[j]]
-                d[i,j] = rep(sapply(p1, npapers), length(p2)) * distances[as.matrix(expand.grid(p1,p2))]
+                if(i != j) {
+                    p1 <- which(keywords %in% clusters[[i]])
+                    p2 <- which(keywords %in% clusters[[j]])
+                    d[i,j] = sum(rep(sapply(p1, npapers), length(p2)) * distances[as.matrix(expand.grid(p1,p2))])
+                }
             }
         }
         d
     }
     d <- distances
     while(TRUE) {
-        i <- which(d==min(d), arr.ind=T)
-        if(d[i] < ct) {
+        i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
+        if(length(clusters) > 1 && d[i] < ct) {
             clusters = merge.cluster(clusters, i[1], i[2])
             d = update.dist(clusters)
         } else break
@@ -243,16 +250,18 @@ quick.clustering <- function(keywords) {
 
 intersect.clustering <- function(keywords, clusters) {
     potentials <- anyDuplicated(unlist(clusters))
-    for(k in potentials) {
+    if(potentials!=0) for(p in potentials) {
+        k <- unlist(clusters)[p]
         ic <- which(sapply(lapply(clusters, function(x) which(x==k)), function(x) length(x)>0))
         newk <- c()
-        for(cl in ic) {
+        for(i in ic) {
+            cl <- clusters[[i]]
             pseudo <- choose.pseudo(k, cl[-which(cl == k)])
             newk <- c(newk, add.pseudo(k, pseudo, cl))
         }
         keywords = c(keywords[-which(keywords==k)], newk)
         clusters <- quick.clustering(keywords)
-        if(length(clusters) > 0) {
+        if(length(clusters) > 1) {
             # new keywords are already added, so only delete ambiguous keyword
             delete.keyword(k)
             # split was done
@@ -283,10 +292,11 @@ academic <- function() {
     # so no need in this check.
 
     # 2: distribution check
-    for(k in ls(keywordsdb)) {
+    for(k in names(reldb_df)) {
         mo <- main.cooccur(k, nmain, index=FALSE)
         p <- apply(mo, 2, sum) / total.cooccur(k)
-        if(p < maincover) delete.keyword(k)
+        # or all?
+        if(any(p < maincover)) delete.keyword(k)
     }
 
     # 3: only one source at the moment, so no need
@@ -300,7 +310,8 @@ klink2 <- function() {
     while(continue) {
         # set to true only if there was splitting / merging done
         continue = FALSE
-        for(k in ls(keywordsdb)) {
+        for(k in names(reldb_df)) {
+            cat("Inferring keyword: ", k, "\n")
             rk <- related.keywords(k)
             for(k2 in rk) {
                 infer(k, keyword.name(k2))
