@@ -74,7 +74,7 @@ T.metric <- function(r, x, y) {
 }
 
 S.metric <- function(r, x, y) {
-    semantic.similarity(r, x, y) / max(semantic.similarity(r, x, y, is_super=TRUE), semantic.similarity(r, x, y, is_sib=TRUE)) + 1
+    semantic.similarity(r, x, y) / (max(semantic.similarity(r, x, y, is_super=TRUE), semantic.similarity(r, x, y, is_sib=TRUE)) + 1)
 }
 
 # infer relations
@@ -145,16 +145,19 @@ distance.matrix <- function(keywords) {
     distances <- matrix(0, nrow=length(keywords), ncol=length(keywords))
     for(i1 in 1:length(keywords)) {
         for(i2 in i1:length(keywords)) {
-            d <- 0
             if(i1 != i2) {
-                k1 <- keywords[i1]
-                k2 <- keywords[i2]
+                d <- 0
                 for(i in seq_along(relations)) {
-                    d = d + S.metric(relations[i], k1, k2)
+                    # there can be list of keyword objects or vector of keyword ids
+                    d = d + ifelse(is.list(keywords),
+                                S.metric(relations[i], keywords[[i1]], keywords[[i2]]),
+                                S.metric(relations[i], keywords[i1], keywords[i2]))
                 }
+                distances[i1,i2] = d
+                distances[i2,i1] = d
+            } else {
+                distances[i1,i1] = Inf
             }
-            distances[i1,i2] = d
-            distances[i2,i1] = d
         }
     }
     distances
@@ -183,6 +186,8 @@ similar <- function() {
                     p1 <- which(keywords %in% clusters[[i]])
                     p2 <- which(keywords %in% clusters[[j]])
                     d[i,j] = sum(distances[as.matrix(expand.grid(p1,p2))])
+                } else {
+                    d[i,j] = Inf
                 }
             }
         }
@@ -192,6 +197,7 @@ similar <- function() {
     while(length(clusters) >= mt) {
         if(verbosity>=3) cat("merge similar iteration: #clusters = ", length(clusters), "\n")
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
+        if(length(i) > 2) i = i[1,]
         clusters = merge.cluster(clusters, i[1], i[2])
         if(length(clusters) > mt) d = update.dist(clusters)
     }
@@ -207,24 +213,39 @@ similar <- function() {
 
 harm.mean <- function(x) 1 / mean(1/x)
 
-choose.pseudo <- function(k, other) {
+# chooses higher-level keyword from cluster with respect to k
+# that will be used to name pseudo-keywords
+high.in.cluster <- function(k, other) {
     hmeans <- mapply(function(x,y) harm.mean(c(x,y)),
         sapply(other, cooccur, k),
         sapply(other, npapers))
     other[which.max(hmeans)]
 }
 
+# returns list of pseudo-keyword objects intersected with k
+# number of pseudo-keywords is equal to number of clusters
+gen.pseudos <- function(k, clusters) {
+    pseudos <- list()
+    for(i in seq_along(clusters)) {
+        pseudos[[i]] = create.pseudo(c(k, clusters[[i]]))
+    }
+    pseudos
+}
+
 quick.clustering <- function(keywords) {
     distances <- distance.matrix(keywords)
     clusters <- as.list(keywords)
-    update.dist <- function(clusters) {
+    update.dist <- function(keywords) {
         d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
         for(i in seq_along(clusters)) {
             for(j in seq_along(clusters)) {
                 if(i != j) {
                     p1 <- which(keywords %in% clusters[[i]])
                     p2 <- which(keywords %in% clusters[[j]])
-                    d[i,j] = sum(rep(sapply(p1, npapers), length(p2)) * distances[as.matrix(expand.grid(p1,p2))])
+                    w <- rep(sapply(p1, npapers), length(p2))
+                    d[i,j] = sum(w * distances[as.matrix(expand.grid(p1,p2))]) / sum(w)
+                } else {
+                    d[i,j] = Inf
                 }
             }
         }
@@ -233,36 +254,42 @@ quick.clustering <- function(keywords) {
     d <- distances
     while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
-        if(length(clusters) > 1 && d[i] < ct) {
+        if(length(i) > 2) i = i[1,]
+        if(length(clusters) > 1 && d[i[1],i[2]] < ct) {
             clusters = merge.cluster(clusters, i[1], i[2])
-            d = update.dist(clusters)
+            d = update.dist(keywords)
         } else break
     }
     clusters
 }
 
-intersect.clustering <- function(keywords, clusters) {
-    potentials <- anyDuplicated(unlist(clusters))
-    if(potentials!=0) for(p in potentials) {
-        k <- unlist(clusters)[p]
-        ic <- which(sapply(lapply(clusters, function(x) which(x==k)), function(x) length(x)>0))
-        newk <- c()
-        for(i in ic) {
-            cl <- clusters[[i]]
-            pseudo <- choose.pseudo(k, cl[-which(cl == k)])
-            newk <- c(newk, add.pseudo(k, pseudo, cl))
+# k - potentially ambiguous keyword
+# keywords - set of related to k keywords to clusterize
+intersect.clustering <- function(k, keywords) {
+    clusters <- as.list(keywords)
+    pseudos <- gen.pseudos(k, clusters)
+    d <- distance.matrix(pseudos)
+    while(TRUE) {
+        i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
+        if(length(i) > 2) i = i[1,]
+        if(length(clusters) > 1 && d[i[1],i[2]] < ct) {
+            clusters = merge.cluster(clusters, i[1], i[2])
+            pseudos = gen.pseudos(k, clusters)
+            d = distance.matrix(pseudos)
+        } else break
+    }
+    if(length(clusters) > 1) {
+        if(verbosity>=3) cat("splitting keyword ", k, " into ", length(clusters), " keywords\n")
+        # add pseudo-keywords
+        for(i in seq_along(clusters)) {
+            add.pseudo(pseudos[[i]],
+                paste(keyword.name(k), " (", keyword.name(high.in.cluster(k, clusters[[i]])), ")", sep=""),
+                k, cluster[[i]])
         }
-        keywords = c(keywords[-which(keywords==k)], newk)
-        clusters <- quick.clustering(keywords)
-        if(length(clusters) > 1) {
-            # new keywords are already added, so only delete ambiguous keyword
-            delete.keyword(k)
-            # split was done
-            continue <<- TRUE
-        } else {
-            # cleanup created pseudos
-            sapply(newk, delete.keyword)
-        }
+        # delete ambiguous keyword
+        delete.keyword(k)
+        # split was done
+        continue <<- TRUE
     }
 }
 
@@ -270,15 +297,14 @@ intersect.clustering <- function(keywords, clusters) {
 ambiguous <- function() {
     for(k in 1:nkeywords()) {
         if(verbosity>=2) cat("splitAmbiguousKeywords for ", k, " keyword\n")
-        rk <- c(k, related.keywords(k, threshold=relkeyT * 2))
+        rk <- related.keywords(k, threshold=relkeyT * 2)
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
             if(verbosity>=2) cat("intersect clustering; #clusters = ", length(clusters), "\n")
-            intersect.clustering(rk, clusters)
+            intersect.clustering(k, rk)
         }
     }
 }
-
 
 # filterNotAcademicKeywords
 academic <- function() {

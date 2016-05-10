@@ -29,6 +29,15 @@ nkeywords <- function() {
     length(ls(keywordsdb))
 }
 
+# representation of keyword as a single object
+keyword.object <- function(k) {
+    ik <- keyword.index(k)
+    list(irel=inputm[, 2*1:rn-1 + 2*rn*(ik-1)],
+        rel=inputm[, 2*1:rn + 2*rn*(ik-1)],
+        super=super(ik),
+        sib=sib(ik))
+}
+
 # strength of connection between k1 and k2 in regards to relation rel
 # returns number of co-occurrences in case of unquantified relation and
 # sum of minimum values in case of quantified
@@ -105,22 +114,26 @@ cooccur <- function(k1, k2) {
 
 # values of connections for keyword and rel;
 # with length equal to number of keywords
+# keyword: id, string or keyword object
 # With super / sib only super or sib keywords are taken into account.
 conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
-    ik <- keyword.index(keyword)
+    if(!is.list(keyword))
+        ko <- keyword.object(keyword)
+    else
+        ko <- keyword
     rel = relation.index(rel)
-    v <- inputm[, 2*rel + 2*rn*(ik-1)]
-    iv <- inputm[, 2*rel-1 + 2*rn*(ik-1)]
+    v <- ko$rel[, rel]
+    iv <- ko$irel[, rel]
     ind <- which(v > 0)
     v = v[ind]
     iv = iv[ind]
     if(is_super) {
-        leave = iv %in% super(ik)
+        leave = iv %in% ko$super
         iv = iv[leave]
         v = v[leave]
     }
     if(is_sib) {
-        leave = iv %in% sib(ik)
+        leave = iv %in% ko$sib
         iv = iv[leave]
         v = v[leave]
     }
@@ -215,22 +228,39 @@ merge.keywords <- function(cluster) {
     for(k in cluster) delete.keyword(k)
 }
 
-add.pseudo <- function(keyword, pseudo, cluster) {
-    newk <- paste(keyword.name(keyword), " (", keyword.name(pseudo), ")", sep="")
+# creates pseudo-keyword from cluster (set of ids) of keywords
+# returns keyword object
+create.pseudo <- function(cluster) {
+    m <- nrow(inputm)
+    rel <- matrix(0, nrow=m, ncol=rn)
+    irel <- matrix(0, nrow=m, ncol=rn)
+    # NOTE: not a full re-calculation of co-occurrence values, only what is stored in inputm
+    for(r in 1:rn) {
+        v <- as.vector(inputm[, 2*r + 2*rn*(cluster-1)])
+        iv <- as.vector(inputm[, 2*r-1 + 2*rn*(cluster-1)])
+        ind <- order(v, decreasing=TRUE)
+        rel[,r] = v[ind][1:m]
+        irel[,r] = iv[ind][1:m]
+    }
+    list(irel=rel,
+        rel=irel,
+        super=unique(unlist(lapply(cluster, super))),
+        sib=unique(unlist(lapply(cluster, sib))))
+}
+
+# ko - keyword object
+# keyword - ambiguous keyword
+# cluster - all keywords used in intersect clustering
+add.pseudo <- function(ko, name, keyword, cluster) {
     index <- nkeywords() + 1
     relk <- get.reldf(keyword)
 
     m <- nrow(inputm)
     for(r in 1:rn) {
-        v <- as.vector(inputm[, 2*r + 2*rn*(cluster-1)])
-        iv <- as.vector(inputm[, 2*r-1 + 2*rn*(cluster-1)])
-        ind <- order(v)
-        v = v[ind][1:m]
-        iv = iv[ind][1:m]
         if(ncol(inputm) < 2*r-1 + 2*rn*(index-1))
             inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn))
-        inputm[, 2*r-1 + 2*rn*(index-1)] <<- iv
-        inputm[, 2*r + 2*rn*(index-1)] <<- v
+        inputm[, 2*r-1 + 2*rn*(index-1)] <<- ko$irel[,r]
+        inputm[, 2*r + 2*rn*(index-1)] <<- ko$rel[,r]
     }
     entities <- c()
     for(k in cluster) {
@@ -238,8 +268,8 @@ add.pseudo <- function(keyword, pseudo, cluster) {
         entities = unique(c(entities, intersect(relk$entity, rel$entity)))
     }
     reldb_df[[index]] <<- relk[relk$entity %in% entities,]
-    names(reldb_df)[index] <<- newk
-    keywordsdb[[newk]] <<- index
+    names(reldb_df)[index] <<- name
+    keywordsdb[[name]] <<- index
     index
 }
 
