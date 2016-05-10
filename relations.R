@@ -42,7 +42,7 @@ rel.value <- function(k1, k2, r) {
     if(is.na(i)) {
          0
     } else {
-        ifelse(quantified[rel], {
+        if(quantified[rel]) {
             xdf <- get.reldf(k1)
             ydf <- get.reldf(k1)
             xv <- rel.entity(k1, r, xdf)
@@ -51,7 +51,9 @@ rel.value <- function(k1, k2, r) {
             yq <- rel.quantity(k2, r, ydf)
             cooccur <- intersect(xv, yv)
             sum(pmin(xq[which(xv==cooccur)], yq[which(yv==cooccur)]))
-        }, inputm[i, 2*rel + 2*rn*(ik1-1)])
+        } else  {
+            inputm[i, 2*rel + 2*rn*(ik1-1)]
+        }
     }
 }
 

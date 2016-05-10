@@ -7,15 +7,6 @@ library(stringi)
 # r - relation, string
 # k, x, y - keywords, string
 
-# output (semantic) relations
-semrel <- list()
-prepare.output <- function() {
-    for(i in seq_along(semantic)) {
-        semrel[[i]] <<- matrix(, nrow=0, ncol=2)
-    }
-    names(semrel) <<- semantic
-}
-
 # I_r(x,y) conditional probability that
 # an element associated with x will be associated with y
 I.prob <- function(r, x, y, diachronic=FALSE) {
@@ -181,6 +172,7 @@ merge.cluster <- function(clusters, i, j) {
 similar <- function() {
     links <- semrel[[4]]
     keywords <- unique(as.vector(links))
+    if(verbosity>=2) cat("mergeSimilarKeywords for ", length(links), "links or ", length(keywords), " keywords\n")
     distances <- distance.matrix(keywords)
     clusters <- as.list(keywords)
     update.dist <- function(clusters) {
@@ -198,6 +190,7 @@ similar <- function() {
     }
     d <- distances
     while(length(clusters) >= mt) {
+        if(verbosity>=3) cat("merge similar iteration: #clusters = ", length(clusters), "\n")
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         clusters = merge.cluster(clusters, i[1], i[2])
         if(length(clusters) > mt) d = update.dist(clusters)
@@ -276,9 +269,11 @@ intersect.clustering <- function(keywords, clusters) {
 # splitAmbiguousKeywords
 ambiguous <- function() {
     for(k in 1:nkeywords()) {
+        if(verbosity>=2) cat("splitAmbiguousKeywords for ", k, " keyword\n")
         rk <- c(k, related.keywords(k, threshold=relkeyT * 2))
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
+            if(verbosity>=2) cat("intersect clustering; #clusters = ", length(clusters), "\n")
             intersect.clustering(rk, clusters)
         }
     }
@@ -302,24 +297,41 @@ academic <- function() {
     # 3: only one source at the moment, so no need
 }
 
+# output (semantic) relations
+semrel <- list()
+# iteration regulator
+continue <- TRUE
+verbosity <- 4
+prepare.output <- function() {
+    for(i in seq_along(semantic)) {
+        semrel[[i]] <<- matrix(, nrow=0, ncol=2)
+    }
+    names(semrel) <<- semantic
+}
+
 klink2 <- function() {
     prepare.output()
 
     split_merge <- TRUE
-    continue <- TRUE
+    iter <- 1
     while(continue) {
+        if(verbosity>=1) cat("Iteration ", iter, "\nNumber of keywords = ", nkeywords(), "\n")
         # set to true only if there was splitting / merging done
-        continue = FALSE
+        continue <<- FALSE
         for(k in names(reldb_df)) {
-            cat("Inferring keyword: ", k, "\n")
+            if(verbosity>=3) cat("Inferring keyword: ", k, "\n")
             rk <- related.keywords(k)
             for(k2 in rk) {
                 infer(k, keyword.name(k2))
             }
         }
         fix.loops()
-        ifelse(split_merge, ambiguous(), similar())
+        if(split_merge)
+            ambiguous()
+        else
+            similar()
         split_merge = !split_merge
+        iter = iter + 1
     }
     academic()
 }
