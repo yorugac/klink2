@@ -317,6 +317,7 @@ academic <- function() {
     for(k in all.keywords()) {
         mo <- main.cooccur(k, nmain, index=FALSE)
         p <- apply(mo, 2, sum) / total.cooccur(k)
+        p[is.nan(p)] = 1
         # or all?
         if(any(p < maincover)) delete.keyword(k)
     }
