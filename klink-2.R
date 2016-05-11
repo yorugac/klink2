@@ -175,7 +175,7 @@ merge.cluster <- function(clusters, i, j) {
 similar <- function() {
     links <- semrel[[4]]
     keywords <- unique(as.vector(links))
-    if(verbosity>=2) cat("mergeSimilarKeywords for ", length(links), "links or ", length(keywords), " keywords\n")
+    if(verbosity>=2) cat("mergeSimilarKeywords for", length(links), "links or", length(keywords), "keywords\n")
     distances <- distance.matrix(keywords)
     clusters <- as.list(keywords)
     update.dist <- function(clusters) {
@@ -195,7 +195,7 @@ similar <- function() {
     }
     d <- distances
     while(length(clusters) >= mt) {
-        if(verbosity>=3) cat("merge similar iteration: #clusters = ", length(clusters), "\n")
+        if(verbosity>=4) cat("merge similar iteration: #clusters =", length(clusters), "\n")
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
         clusters = merge.cluster(clusters, i[1], i[2])
@@ -233,6 +233,7 @@ gen.pseudos <- function(k, clusters) {
 }
 
 quick.clustering <- function(keywords) {
+    if(length(keywords) <= 1) return(list())
     distances <- distance.matrix(keywords)
     clusters <- as.list(keywords)
     update.dist <- function(keywords) {
@@ -279,7 +280,7 @@ intersect.clustering <- function(k, keywords) {
         } else break
     }
     if(length(clusters) > 1) {
-        if(verbosity>=3) cat("splitting keyword ", k, " into ", length(clusters), " keywords\n")
+        if(verbosity>=3) cat("splitting", k, "into ", length(clusters), "keywords\n")
         # add pseudo-keywords
         for(i in seq_along(clusters)) {
             add.pseudo(pseudos[[i]],
@@ -295,12 +296,12 @@ intersect.clustering <- function(k, keywords) {
 
 # splitAmbiguousKeywords
 ambiguous <- function() {
-    for(k in 1:nkeywords()) {
-        if(verbosity>=2) cat("splitAmbiguousKeywords for ", k, " keyword\n")
+    for(k in all.keywords()) {
+        if(verbosity>=2) cat("splitAmbiguousKeywords for", k, "\n")
         rk <- related.keywords(k, threshold=relkeyT * 2)
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
-            if(verbosity>=2) cat("intersect clustering; #clusters = ", length(clusters), "\n")
+            if(verbosity>=2) cat("intersect clustering; #clusters =", length(clusters), "\n")
             intersect.clustering(k, rk)
         }
     }
@@ -313,7 +314,7 @@ academic <- function() {
     # so no need in this check.
 
     # 2: distribution check
-    for(k in names(reldb_df)) {
+    for(k in all.keywords()) {
         mo <- main.cooccur(k, nmain, index=FALSE)
         p <- apply(mo, 2, sum) / total.cooccur(k)
         # or all?
@@ -328,6 +329,7 @@ semrel <- list()
 # iteration regulator
 continue <- TRUE
 verbosity <- 4
+
 prepare.output <- function() {
     for(i in seq_along(semantic)) {
         semrel[[i]] <<- matrix(, nrow=0, ncol=2)
@@ -341,11 +343,11 @@ klink2 <- function() {
     split_merge <- TRUE
     iter <- 1
     while(continue) {
-        if(verbosity>=1) cat("Iteration ", iter, "\nNumber of keywords = ", nkeywords(), "\n")
+        if(verbosity>=1) cat("Iteration", iter, "\nNumber of keywords =", nkeywords(), "\n")
         # set to true only if there was splitting / merging done
         continue <<- FALSE
-        for(k in names(reldb_df)) {
-            if(verbosity>=3) cat("Inferring keyword: ", k, "\n")
+        for(k in all.keywords()) {
+            if(verbosity>=3) cat("Inferring keyword:", k, "\n")
             rk <- related.keywords(k)
             for(k2 in rk) {
                 infer(k, keyword.name(k2))

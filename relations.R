@@ -29,6 +29,10 @@ nkeywords <- function() {
     length(ls(keywordsdb))
 }
 
+all.keywords <- function() {
+    names(reldb_df)[!is.na(names(reldb_df))]
+}
+
 # representation of keyword as a single object
 keyword.object <- function(k) {
     ik <- keyword.index(k)
@@ -125,6 +129,8 @@ conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
     v <- ko$rel[, rel]
     iv <- ko$irel[, rel]
     ind <- which(v > 0)
+    # if keywords were already deleted
+    ind = which(iv[ind] <= nkeywords())
     v = v[ind]
     iv = iv[ind]
     if(is_super) {
@@ -283,9 +289,16 @@ delete.keyword <- function(keyword) {
         ik <- keyword.index(keyword)
     }
     rm(list=k, envir=keywordsdb)
+    # cannot delete element of reldb_df, instead:
+    names(reldb_df)[ik] <<- NA
+
     for(i in seq_along(semrel)) {
-        if(nrow(semrel[[i]]) > 0) for(r in 1:nrow(semrel[[i]])) {
-            if(any(semrel[[i]][r,]==ik)) semrel[[i]] <<- semrel[[i]][-r,]
+        nsemrel <- nrow(semrel[[i]])
+        if(!is.null(nsemrel) && nsemrel > 0) {
+            todel <- c()
+            for(r in 1:nrow(semrel[[i]]))
+                if(any(semrel[[i]][r,]==ik)) todel = c(todel, r)
+            semrel[[i]] <<- semrel[[i]][-r,]
         }
     }
     # delete cols in inputm?

@@ -30,6 +30,7 @@ k <- 1
 
 # for testing purposes
 d = d[1:5000,]
+# d = d[ceiling(runif(5000, min=0, max=dim(d)[1]-1)),]
 
 # length of saved relation values
 m <- 100
@@ -129,9 +130,9 @@ for(i in 1:length(reldb_l)) {
         }
     }
 }
-# sorting in ascending order of keywords
+# sorting in decreasing order of relation values
 for(i in seq(1,ncol(inputm)-1,by=2)) {
-    ind <- order(inputm[, i])
+    ind <- order(inputm[, i+1], decreasing=TRUE)
     inputm[, i] = inputm[, i][ind]
     inputm[, i+1] = inputm[, i+1][ind]
 }
