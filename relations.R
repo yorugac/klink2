@@ -4,6 +4,8 @@
 # that hold all the keywords, relations and co-occurrences calculations;
 # as well as semrel for output
 
+maxindex <- NULL
+
 # returns dataframe with all relations for the given keyword
 get.reldf <- function(keyword) {
     index <- keyword.index(keyword)
@@ -31,6 +33,12 @@ nkeywords <- function() {
 
 all.keywords <- function() {
     names(reldb_df)[!is.na(names(reldb_df))]
+}
+
+new.index <- function() {
+    if(is.null(maxindex)) maxindex <<- nkeywords()
+    maxindex <<- maxindex + 1
+    maxindex
 }
 
 # representation of keyword as a single object
@@ -211,7 +219,7 @@ related.keywords <- function(keyword, threshold=relkeyT) {
 
 merge.keywords <- function(cluster) {
     newk <- paste(keyword.name(cluster[1]), " merged", sep="")
-    index <- nkeywords() + 1
+    index <- new.index()
     rel <- get.reldf(cluster[1])
     for(k in 2:length(cluster)) {
         rel = rbind(rel, get.reldf(cluster[k]))
@@ -258,7 +266,7 @@ create.pseudo <- function(cluster) {
 # keyword - ambiguous keyword
 # cluster - all keywords used in intersect clustering
 add.pseudo <- function(ko, name, keyword, cluster) {
-    index <- nkeywords() + 1
+    index <- new.index()
     relk <- get.reldf(keyword)
 
     m <- nrow(inputm)
