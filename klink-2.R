@@ -178,7 +178,7 @@ similar <- function() {
     if(verbosity>=2) cat("mergeSimilarKeywords for", length(links), "links or", length(keywords), "keywords\n")
     distances <- distance.matrix(keywords)
     clusters <- as.list(keywords)
-    update.dist <- function(clusters) {
+    update.dist <- function() {
         d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
         for(i in seq_along(clusters)) {
             for(j in seq_along(clusters)) {
@@ -194,12 +194,13 @@ similar <- function() {
         d
     }
     d <- distances
-    while(length(clusters) >= mt) {
-        if(verbosity>=4) cat("merge similar iteration: #clusters =", length(clusters), "\n")
+    while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
-        clusters = merge.cluster(clusters, i[1], i[2])
-        if(length(clusters) > mt) d = update.dist(clusters)
+        if(length(clusters) > 1 && d[i[1],i[2]] < merge_t) {
+            clusters = merge.cluster(clusters, i[1], i[2])
+            d = update.dist()
+        } else break
     }
     for(cl in clusters) {
         for(i in cl)
@@ -244,7 +245,7 @@ quick.clustering <- function(keywords) {
                     p1 <- which(keywords %in% clusters[[i]])
                     p2 <- which(keywords %in% clusters[[j]])
                     w <- rep(sapply(p1, npapers), length(p2))
-                    d[i,j] = sum(w * distances[as.matrix(expand.grid(p1,p2))]) / sum(w)
+                    d[i,j] = sum((w * distances[as.matrix(expand.grid(p1,p2))]) / sum(w))
                 } else {
                     d[i,j] = Inf
                 }
@@ -256,7 +257,7 @@ quick.clustering <- function(keywords) {
     while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
-        if(length(clusters) > 1 && d[i[1],i[2]] < ct) {
+        if(length(clusters) > 1 && d[i[1],i[2]] < quick_t) {
             clusters = merge.cluster(clusters, i[1], i[2])
             d = update.dist(keywords)
         } else break
@@ -273,7 +274,7 @@ intersect.clustering <- function(k, keywords) {
     while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
-        if(length(clusters) > 1 && d[i[1],i[2]] < ct) {
+        if(length(clusters) > 1 && d[i[1],i[2]] < intersect_t) {
             clusters = merge.cluster(clusters, i[1], i[2])
             pseudos = gen.pseudos(k, clusters)
             d = distance.matrix(pseudos)
@@ -285,7 +286,7 @@ intersect.clustering <- function(k, keywords) {
         for(i in seq_along(clusters)) {
             add.pseudo(pseudos[[i]],
                 paste(keyword.name(k), " (", keyword.name(high.in.cluster(k, clusters[[i]])), ")", sep=""),
-                k, cluster[[i]])
+                k, clusters[[i]])
         }
         # delete ambiguous keyword
         delete.keyword(k)
@@ -329,7 +330,6 @@ academic <- function() {
 semrel <- list()
 # iteration regulator
 continue <- TRUE
-verbosity <- 4
 
 prepare.output <- function() {
     for(i in seq_along(semantic)) {

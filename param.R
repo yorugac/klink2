@@ -7,6 +7,9 @@ relations <- c("publication", "author", "venue", "area")
 quantified <- c(FALSE, FALSE, FALSE, FALSE)
 rn <- length(relations)
 
+# verbosity level
+verbosity <- 4
+
 # what is the minimum connection strength for keywords to be considered related?
 relkeyT <- 1
 
@@ -26,10 +29,12 @@ tre <- 2
 gamma <- 2 # must be > 0
 
 ## clustering params
-# clustering threshold
-ct <- 20
-# merging threshold NOTE: 6 levels are mentioned in TaxGen paper
-mt <- 6
+# clustering threshold for mergeSimilarWords
+merge_t <- 2
+# clustering threshold for intersectBasedClustering
+intersect_t <- 1
+# clustering threshold for quickHierarchicalClustering
+quick_t <- 0.8
 
 ## filter params
 # number of main keywords
