@@ -10,10 +10,11 @@ library(stringi)
 # I_r(x,y) conditional probability that
 # an element associated with x will be associated with y
 I.prob <- function(r, x, y, diachronic=FALSE) {
+    v <- rel.value(x, y, r)
+    if(v==0) return(0)
     w <- ifelse(diachronic,
             (rel.year(y, r) - min(rel.year(x, r)) + 1)^(-gamma),
             1)
-    v <- rel.value(x, y, r)
     w * v
 }
 
@@ -175,7 +176,8 @@ merge.cluster <- function(clusters, i, j) {
 similar <- function() {
     links <- semrel[[4]]
     keywords <- unique(as.vector(links))
-    if(verbosity>=2) cat("mergeSimilarKeywords for", length(links), "links or", length(keywords), "keywords\n")
+    if(verbosity>=2) cat("mergeSimilarKeywords for", nrow(links), "links or", length(keywords), "keywords.\n")
+    if(!length(keywords)) return()
     distances <- distance.matrix(keywords)
     clusters <- as.list(keywords)
     update.dist <- function() {
@@ -228,7 +230,7 @@ high.in.cluster <- function(k, other) {
 gen.pseudos <- function(k, clusters) {
     pseudos <- list()
     for(i in seq_along(clusters)) {
-        pseudos[[i]] = create.pseudo(c(k, clusters[[i]]))
+        pseudos[[i]] = create.pseudo(k, clusters[[i]])
     }
     pseudos
 }
@@ -265,9 +267,10 @@ quick.clustering <- function(keywords) {
     clusters
 }
 
-# k - potentially ambiguous keyword
+# ambk - potentially ambiguous keyword
 # keywords - set of related to k keywords to clusterize
-intersect.clustering <- function(k, keywords) {
+intersect.clustering <- function(ambk, keywords) {
+    k = keyword.index(ambk)
     clusters <- as.list(keywords)
     pseudos <- gen.pseudos(k, clusters)
     d <- distance.matrix(pseudos)
@@ -281,12 +284,12 @@ intersect.clustering <- function(k, keywords) {
         } else break
     }
     if(length(clusters) > 1) {
-        if(verbosity>=3) cat("splitting", k, "into ", length(clusters), "keywords\n")
+        if(verbosity>=3) cat("splitting", ambk, "into ", length(clusters), "keywords\n")
         # add pseudo-keywords
         for(i in seq_along(clusters)) {
             add.pseudo(pseudos[[i]],
                 paste(keyword.name(k), " (", keyword.name(high.in.cluster(k, clusters[[i]])), ")", sep=""),
-                k, clusters[[i]])
+                clusters[[i]])
         }
         # delete ambiguous keyword
         delete.keyword(k)
@@ -297,12 +300,13 @@ intersect.clustering <- function(k, keywords) {
 
 # splitAmbiguousKeywords
 ambiguous <- function() {
+    if(verbosity>=2) cat("Seeking ambiguous keywords.\n")
     for(k in all.keywords()) {
-        if(verbosity>=2) cat("splitAmbiguousKeywords for", k, "\n")
+        if(verbosity>=3) cat("splitAmbiguousKeywords for", k, "\n")
         rk <- related.keywords(k, threshold=relkeyT * 2)
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
-            if(verbosity>=2) cat("intersect clustering; #clusters =", length(clusters), "\n")
+            if(verbosity>=3) cat("intersect clustering: #clusters =", length(clusters), "\n")
             intersect.clustering(k, rk)
         }
     }
@@ -310,6 +314,7 @@ ambiguous <- function() {
 
 # filterNotAcademicKeywords
 academic <- function() {
+    if(verbosity>=2) cat("Filtering keywords.\n")
     # 1: keywords without relations
     # Semantic relations are stored in a separate data structure,
     # so no need in this check.
@@ -345,6 +350,7 @@ klink2 <- function() {
     iter <- 1
     while(continue) {
         if(verbosity>=1) cat("Iteration", iter, "\nNumber of keywords =", nkeywords(), "\n")
+        if(verbosity>=2) cat("Keyword inferrence.\n")
         # set to true only if there was splitting / merging done
         continue <<- FALSE
         for(k in all.keywords()) {
@@ -355,6 +361,10 @@ klink2 <- function() {
             }
         }
         fix.loops()
+        if(verbosity>=1)
+            cat("Number of semantic relations after inference:\n\trelatedEquivalent: ", nrow(semrel[[1]]),
+                "\n\tbroaderGeneric: ", nrow(semrel[[2]]), "\n\tcontributesTo:", nrow(semrel[[3]]),
+                "\n\tsimilarityLink:", nrow(semrel[[4]]), "\n")
         if(split_merge)
             ambiguous()
         else

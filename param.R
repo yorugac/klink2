@@ -8,7 +8,11 @@ quantified <- c(FALSE, FALSE, FALSE, FALSE)
 rn <- length(relations)
 
 # verbosity level
-verbosity <- 4
+# 0 - no messages
+# 1 - main statistics per iteration
+# 2 - notifications for the start of key procedures
+# 3 - word-by-word messaging
+verbosity <- 2
 
 # what is the minimum connection strength for keywords to be considered related?
 relkeyT <- 1
@@ -22,7 +26,7 @@ tR <- c(1, 1, 1, 1)
 # threshold for hierarchical indicators, i.e. how many should point in the same direction
 th <- 2
 # threshold for relatedEquivalent metric
-tS <- 1
+tS <- 0.5
 # threshold for relatedEquivalent indicators, i.e. how many should be positive
 tre <- 2
 # coefficient for T metric
