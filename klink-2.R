@@ -320,23 +320,29 @@ academic <- function() {
     # so no need in this check.
 
     # 2: distribution check
-    for(k in all.keywords()) {
+    keywords <- unique(triples$k1, triples$k2)
+    for(k in keywords) {
         mo <- main.cooccur(k, nmain, index=FALSE)
         p <- apply(mo, 2, sum) / total.cooccur(k)
         p[is.nan(p)] = 1
         # or all?
-        if(any(p < maincover)) delete.keyword(k)
+        if(any(p < maincover)) {
+            # delete keyword from output semantic relations
+            triples <<- triples[!triples$k1==k | triples$k2==k,]
+        }
     }
 
     # 3: only one source at the moment, so no need
 }
 
-# output (semantic) relations
+# output semantic relations
+triples <- data.frame(k1=character(0), k2=character(0), relation=numeric(0), stringsAsFactors=FALSE)
+# working semantic relations
 semrel <- list()
 # iteration regulator
 continue <- TRUE
 
-prepare.output <- function() {
+prepare.semrel <- function() {
     for(i in seq_along(semantic)) {
         semrel[[i]] <<- matrix(, nrow=0, ncol=2)
     }
@@ -344,7 +350,7 @@ prepare.output <- function() {
 }
 
 klink2 <- function() {
-    prepare.output()
+    prepare.semrel()
 
     split_merge <- TRUE
     iter <- 1
@@ -362,7 +368,7 @@ klink2 <- function() {
         }
         fix.loops()
         if(verbosity>=1)
-            cat("Number of semantic relations after inference:\n\trelatedEquivalent: ", nrow(semrel[[1]]),
+            cat("Number of working semantic relations after inference:\n\trelatedEquivalent: ", nrow(semrel[[1]]),
                 "\n\tbroaderGeneric: ", nrow(semrel[[2]]), "\n\tcontributesTo:", nrow(semrel[[3]]),
                 "\n\tsimilarityLink:", nrow(semrel[[4]]), "\n")
         if(split_merge)

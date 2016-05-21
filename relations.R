@@ -1,8 +1,11 @@
-# Handling keywords and their relations.
+# Handling keywords and their relations; internal functions behind Klink-2.
 
 # It is assumed that there are global objects keywordsdb, reldb_df and inputm
 # that hold all the keywords, relations and co-occurrences calculations;
-# as well as semrel for output
+# as well as semrel and triples for output.
+#
+# No keywords are truly deteled. Whether keyword should be included in analysis
+# can be checked with keyword.exists -- whether there is a name for it in reldb_df.
 
 maxindex <- NULL
 
@@ -32,7 +35,7 @@ relation.index <- function(rel) {
 }
 
 nkeywords <- function() {
-    length(ls(keywordsdb))
+    length(all.keywords())
 }
 
 all.keywords <- function() {
@@ -330,6 +333,8 @@ add.pseudo <- function(ko, name, cluster) {
 }
 
 # keyword must be character
+# marks keyword as deleted or as not to be analysed, preserves its semantic
+# relations and cleans up working semantic relations
 delete.keyword <- function(keyword) {
     if(is.character(keyword)) {
         k = keyword
@@ -338,20 +343,26 @@ delete.keyword <- function(keyword) {
         k = keyword.name(keyword)
         ik <- keyword.index(keyword)
     }
-    rm(list=k, envir=keywordsdb)
-    # cannot delete element of reldb_df, instead:
-    names(reldb_df)[ik] <<- NA
-
     for(i in seq_along(semrel)) {
         nsemrel <- nrow(semrel[[i]])
         if(!is.null(nsemrel) && nsemrel > 0) {
             todel <- c()
             for(r in 1:nrow(semrel[[i]]))
                 if(any(semrel[[i]][r,]==ik)) todel = c(todel, r)
+            if(i < 4) {
+                # preserve three semantic relations
+                triples <<- rbind(triples, data.frame(list(
+                    k1=sapply(semrel[[i]][todel,1], keyword.name),
+                    k2=sapply(semrel[[i]][todel,2], keyword.name),
+                    relation=rep(i, length(todel))), stringsAsFactors=FALSE))
+            }
             if(length(todel) > 0) semrel[[i]] <<- semrel[[i]][-todel,]
         }
         if(length(semrel[[i]]) < 3)
-            dim(semrel[[i]]) <<- c(length(semrel[[i]]), 2)
+            dim(semrel[[i]]) <<- c(length(semrel[[i]])/2, 2)
     }
-    # delete cols in inputm?
+
+    # rm(list=k, envir=keywordsdb)
+    # cannot delete element of reldb_df, instead:
+    names(reldb_df)[ik] <<- NA
 }
