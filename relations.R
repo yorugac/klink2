@@ -135,27 +135,42 @@ cooccur <- function(k1, k2) {
 # values of connections for keyword and rel;
 # with length equal to number of keywords
 # keyword: id, string or keyword object
-# With super / sib only super or sib keywords are taken into account.
+# With is_super / is_sib only super or sib keywords are taken into account.
+# If both super and sib flags are set, matrix with 3 columns is returned.
 conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
-    if(!is.list(keyword))
-        ko <- keyword.object(keyword)
-    else
-        ko <- keyword
-    rel = relation.index(rel)
-    v <- ko$rel[, rel]
-    iv <- ko$irel[, rel]
+    rel <- relation.index(rel)
+    if(!is.list(keyword)) {
+        ik <- keyword.index(keyword)
+        v <- inputm[, 2*rel + 2*rn*(ik-1)]
+        iv <- inputm[, 2*rel-1 + 2*rn*(ik-1)]
+        if(is_super) superv <- super(ik)
+        if(is_sib) sibv <- sib(ik)
+    } else {
+        v <- keyword$rel[, rel]
+        iv <- keyword$irel[, rel]
+        superv <- keyword$super
+        sibv <- keyword$sib
+    }
     ind <- which(v > 0)
     # if keywords were already deleted
     ind = which(iv[ind] <= nkeywords())
     v = v[ind]
     iv = iv[ind]
+    if(is_super && is_sib) {
+        bv = matrix(0, ncol=3, nrow=nkeywords())
+        bv[,1][iv] = v
+        leave = iv %in% superv
+        bv[,2][iv[leave]] = v[leave]
+        leave = iv %in% sibv
+        bv[,3][iv[leave]] = v[leave]
+        return(bv)
+    }
     if(is_super) {
-        leave = iv %in% ko$super
+        leave = iv %in% superv
         iv = iv[leave]
         v = v[leave]
-    }
-    if(is_sib) {
-        leave = iv %in% ko$sib
+    } else if(is_sib) {
+        leave = iv %in% sibv
         iv = iv[leave]
         v = v[leave]
     }

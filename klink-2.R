@@ -52,9 +52,10 @@ have.acronym <- function(x, y) {
 }
 
 # c_r(x,y) measure
-semantic.similarity <- function(r, x, y, is_super=FALSE, is_sib=FALSE) {
-    vx <- conn.vector(r, x, is_super, is_sib)
-    vy <- conn.vector(r, y, is_super, is_sib)
+# vx, vy as arguments for optimization purpose
+semantic.similarity <- function(r, x, y, is_super=FALSE, is_sib=FALSE, vx=NULL, vy=NULL) {
+    if(is.null(vx)) vx <- conn.vector(r, x, is_super, is_sib)
+    if(is.null(vy)) vy <- conn.vector(r, y, is_super, is_sib)
     s <- as.double(vx %*% vy) / (sqrt(sum(vx^2)) * sqrt(sum(vy^2)))
     ifelse(is.nan(s), 0, s)
 }
@@ -75,7 +76,10 @@ T.metric <- function(r, x, y) {
 }
 
 S.metric <- function(r, x, y) {
-    semantic.similarity(r, x, y) / (max(semantic.similarity(r, x, y, is_super=TRUE), semantic.similarity(r, x, y, is_sib=TRUE)) + 1)
+    vx <- conn.vector(r, x, is_super=TRUE, is_sib=TRUE)
+    vy <- conn.vector(r, y, is_super=TRUE, is_sib=TRUE)
+    semantic.similarity(r, x, y, vx=vx[,1], vy=vy[,1]) /
+        (max(semantic.similarity(r, x, y, vx=vx[,2], vy=vy[,2]), semantic.similarity(r, x, y, vx=vx[,3], vy=vy[,3])) + 1)
 }
 
 # infer relations
@@ -142,25 +146,23 @@ fix.loops <- function() {
         semrel[[2]] <<- delete.cycles(semrel[[2]])
 }
 
+# keywords: list of keyword objects or vector of keyword ids
 distance.matrix <- function(keywords) {
-    distances <- matrix(0, nrow=length(keywords), ncol=length(keywords))
-    for(i1 in 1:length(keywords)) {
-        for(i2 in i1:length(keywords)) {
+    n <- length(keywords)
+    distances <- matrix(0, nrow=n, ncol=n)
+    for(i1 in 1:n) {
+        for(i2 in i1:n) {
             if(i1 != i2) {
-                d <- 0
-                for(i in seq_along(relations)) {
-                    # there can be list of keyword objects or vector of keyword ids
-                    d = d + ifelse(is.list(keywords),
-                                S.metric(relations[i], keywords[[i1]], keywords[[i2]]),
-                                S.metric(relations[i], keywords[i1], keywords[i2]))
-                }
-                distances[i1,i2] = d
-                distances[i2,i1] = d
-            } else {
-                distances[i1,i1] = Inf
+                distances[i1,i2] = sum(sapply(relations, function(r) {
+                    ifelse(is.list(keywords),
+                                S.metric(r, keywords[[i1]], keywords[[i2]]),
+                                S.metric(r, keywords[i1], keywords[i2]))
+                    }))
+                distances[i2,i1] = distances[i1,i2]
             }
         }
     }
+    diag(distances) = Inf
     distances
 }
 
@@ -188,11 +190,10 @@ similar <- function() {
                     p1 <- which(keywords %in% clusters[[i]])
                     p2 <- which(keywords %in% clusters[[j]])
                     d[i,j] = sum(distances[as.matrix(expand.grid(p1,p2))])
-                } else {
-                    d[i,j] = Inf
                 }
             }
         }
+        diag(d) = Inf
         d
     }
     d <- distances
@@ -248,11 +249,10 @@ quick.clustering <- function(keywords) {
                     p2 <- which(keywords %in% clusters[[j]])
                     w <- rep(sapply(p1, npapers), length(p2))
                     d[i,j] = sum((w * distances[as.matrix(expand.grid(p1,p2))]) / sum(w))
-                } else {
-                    d[i,j] = Inf
                 }
             }
         }
+        diag(d) = Inf
         d
     }
     d <- distances
