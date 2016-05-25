@@ -132,11 +132,11 @@ cooccur <- function(k1, k2) {
     v
 }
 
-# values of connections for keyword and rel;
+# values of connections for keyword and rel in form of matrix;
 # with length equal to number of keywords
 # keyword: id, string or keyword object
 # With is_super / is_sib only super or sib keywords are taken into account.
-# If both super and sib flags are set, matrix with 3 columns is returned.
+# If both super and sib flags are set, list with 3 matrices is returned.
 conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
     rel <- relation.index(rel)
     if(!is.list(keyword)) {
@@ -157,12 +157,12 @@ conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
     v = v[ind]
     iv = iv[ind]
     if(is_super && is_sib) {
-        bv = matrix(0, ncol=3, nrow=nkeywords())
-        bv[,1][iv] = v
+        bv = list()
+        bv[[1]] = matrix(c(iv, v), ncol=2)
         leave = iv %in% superv
-        bv[,2][iv[leave]] = v[leave]
+        bv[[2]] = matrix(c(iv[leave], v[leave]), ncol=2)
         leave = iv %in% sibv
-        bv[,3][iv[leave]] = v[leave]
+        bv[[3]] = matrix(c(iv[leave], v[leave]), ncol=2)
         return(bv)
     }
     if(is_super) {
@@ -174,9 +174,7 @@ conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
         iv = iv[leave]
         v = v[leave]
     }
-    bv = rep(0, nkeywords())
-    bv[iv] = v
-    bv
+    matrix(c(iv, v), ncol=2)
 }
 
 total.cooccur <- function(k) {
@@ -309,7 +307,7 @@ create.pseudo <- function(keyword, cluster) {
             if(!is.na(im)) {
                 v[im] = v[im] + value
             } else {
-                # is there place in the store list for the value with j?
+                # is there place in the stored list for the value with j?
                 im = which.min(v)
                 if(value > v[im]) {
                      iv[im] = j
@@ -322,8 +320,8 @@ create.pseudo <- function(keyword, cluster) {
         irel[,r] = iv[ind]
     }
     cluster = c(keyword, cluster)
-    list(irel=rel,
-        rel=irel,
+    list(irel=irel,
+        rel=rel,
         super=unique(unlist(lapply(cluster, super))),
         sib=unique(unlist(lapply(cluster, sib))),
         df=reldf)

@@ -51,18 +51,21 @@ have.acronym <- function(x, y) {
       length(stri_split_fixed(y, ".")[[1]]) > 1
 }
 
-# c_r(x,y) measure
-# vx, vy as arguments for optimization purpose
-semantic.similarity <- function(r, x, y, is_super=FALSE, is_sib=FALSE, vx=NULL, vy=NULL) {
-    if(is.null(vx)) vx <- conn.vector(r, x, is_super, is_sib)
-    if(is.null(vy)) vy <- conn.vector(r, y, is_super, is_sib)
-    s <- as.double(vx %*% vy) / (sqrt(sum(vx^2)) * sqrt(sum(vy^2)))
-    ifelse(is.nan(s), 0, s)
-}
-
 # n(x,y) measure
 string.similarity <- function(x, y) {
     sum(nweights * c(length(lcs(x,y)), identical.words(x,y), common.chars(x,y), have.acronym(x,y)))
+}
+
+# c_r(x,y) measure
+# vx, vy as arguments for optimization purpose, matrices returned by conn.vector
+semantic.similarity <- function(r, x, y, is_super=FALSE, is_sib=FALSE, vx=NULL, vy=NULL) {
+    if(is.null(vx)) vx <- conn.vector(r, x, is_super, is_sib)
+    if(is.null(vy)) vy <- conn.vector(r, y, is_super, is_sib)
+    interv <- intersect(vx[,1], vy[,1])
+    intervx <- vx[,2][match(interv, vx[,1])]
+    intervy <- vy[,2][match(interv, vy[,1])]
+    s <- as.double(intervx %*% intervy) / (sqrt(sum(vx[,2]^2)) * sqrt(sum(vy[,2]^2)))
+    ifelse(is.nan(s), 0, s)
 }
 
 H.metric <- function(r, x, y, diachronic=FALSE) {
@@ -78,8 +81,8 @@ T.metric <- function(r, x, y) {
 S.metric <- function(r, x, y) {
     vx <- conn.vector(r, x, is_super=TRUE, is_sib=TRUE)
     vy <- conn.vector(r, y, is_super=TRUE, is_sib=TRUE)
-    semantic.similarity(r, x, y, vx=vx[,1], vy=vy[,1]) /
-        (max(semantic.similarity(r, x, y, vx=vx[,2], vy=vy[,2]), semantic.similarity(r, x, y, vx=vx[,3], vy=vy[,3])) + 1)
+    semantic.similarity(r, x, y, vx=vx[[1]], vy=vy[[1]]) /
+        (max(semantic.similarity(r, x, y, vx=vx[[2]], vy=vy[[2]]), semantic.similarity(r, x, y, vx=vx[[3]], vy=vy[[3]])) + 1)
 }
 
 # infer relations
