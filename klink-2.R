@@ -12,10 +12,12 @@ library(stringi)
 I.prob <- function(r, x, y, diachronic=FALSE) {
     v <- rel.value(x, y, r)
     if(v==0) return(0)
-    w <- ifelse(diachronic,
-            (rel.year(y, r) - min(rel.year(x, r)) + 1)^(-gamma),
-            1)
-    w * v
+    if(!quantified[relation.index(r)]) v = rep(1, v)
+    if(diachronic) {
+        ce <- common.entities(x, y, r)
+        v = v * ((ent.year(y, ce) - min(ent.year(x, ce)) + 1)^(-gamma))[1:length(v)]
+    }
+    sum(v)
 }
 
 # longest common substring
@@ -65,13 +67,15 @@ semantic.similarity <- function(r, x, y, is_super=FALSE, is_sib=FALSE, vx=NULL, 
     intervx <- vx[,2][match(interv, vx[,1])]
     intervy <- vy[,2][match(interv, vy[,1])]
     s <- as.double(intervx %*% intervy) / (sqrt(sum(vx[,2]^2)) * sqrt(sum(vy[,2]^2)))
-    ifelse(is.nan(s), 0, s)
+    if(is.nan(s)) s = 0
+    s
 }
 
 H.metric <- function(r, x, y, diachronic=FALSE) {
     m <- (I.prob(r, x, y, diachronic) / I.prob(r, x, x, diachronic) - I.prob(r, y, x, diachronic) / I.prob(r, y, y, diachronic)) *
         semantic.similarity(r, x, y) * string.similarity(x, y)
-    ifelse(is.nan(m), 0, m)
+    if(is.nan(m)) m = 0
+    m
 }
 
 T.metric <- function(r, x, y) {
@@ -127,14 +131,16 @@ infer <- function(x, y) {
     if (hierarchy == 1 || hierarchy == -1) {
         if (age(x) > age(y) && nentities(x) > nentities(y) && prevalence(tmetrics, hmetrics)) {
             # broaderGeneric
-            ifelse(hierarchy == 1,
-                set.semantic(x, semantic[2], y),
-                set.semantic(y, semantic[2], x))
+            if(hierarchy == 1)
+                set.semantic(x, semantic[2], y)
+            else
+                set.semantic(y, semantic[2], x)
         } else {
             # contributesTo
-            ifelse(hierarchy == 1,
-                set.semantic(y, semantic[3], x),
-                set.semantic(x, semantic[3], y))
+            if(hierarchy == 1)
+                set.semantic(y, semantic[3], x)
+            else
+                set.semantic(x, semantic[3], y)
         }
     }
     # "similarityLink"
@@ -157,9 +163,10 @@ distance.matrix <- function(keywords) {
         for(i2 in i1:n) {
             if(i1 != i2) {
                 distances[i1,i2] = sum(sapply(relations, function(r) {
-                    ifelse(is.list(keywords),
-                                S.metric(r, keywords[[i1]], keywords[[i2]]),
-                                S.metric(r, keywords[i1], keywords[i2]))
+                    if(is.list(keywords))
+                        S.metric(r, keywords[[i1]], keywords[[i2]])
+                    else
+                        S.metric(r, keywords[i1], keywords[i2])
                     }))
                 distances[i2,i1] = distances[i1,i2]
             }
@@ -359,11 +366,11 @@ klink2 <- function() {
     iter <- 1
     while(continue) {
         if(verbosity>=1) cat("Iteration", iter, "\nNumber of keywords =", nkeywords(), "\n")
-        if(verbosity>=2) cat("Keyword inferrence.\n")
+        if(verbosity>=2) cat("Keyword inference.\n")
         # set to true only if there was splitting / merging done
         continue <<- FALSE
         for(k in all.keywords()) {
-            if(verbosity>=3) cat("Inferring keyword:", k, "\n")
+            if(verbosity>=3) cat("Infering keyword:", k, "\n")
             rk <- related.keywords(k)
             for(k2 in rk) {
                 infer(k, keyword.name(k2))

@@ -2,7 +2,12 @@
 # similarityLink is a temporal structure for computation of relatedEquivalent
 semantic <- c("relatedEquivalent", "broaderGeneric", "contributesTo", "similarityLink")
 
-# input relations taken into consideration
+# Input relations taken into consideration:
+# relation 1: if 2 keywords are used in the same publication
+# relation 2: if 2 keywords are used by the same author in the same year
+# relation 3: if 2 keywords are used in the same venue (name of journal and so on) in the same year
+# relation 4: if 2 keywords are classified as belonging to the same research area in the same year
+# then there is a co-occurrence in regards of corresponding relation.
 relations <- c("publication", "author", "venue", "area")
 quantified <- c(FALSE, FALSE, FALSE, FALSE)
 rn <- length(relations)

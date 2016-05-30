@@ -46,17 +46,17 @@ process_item <- function(item) {
     relation <- c("publication", rep("author", length(authors)), "venue", rep("area", length(areas)))
     entity <- c(item["TI"], authors, venues, areas)
     quantity <- rep(NA_integer_, length(entity))
-    years <- rep(item["PY"], length(entity))
+    year <- as.numeric(rep(item["PY"], length(entity)))
 
     for(i in seq_along(newkeywords)) {
         keywordsdb[[newkeywords[i]]] <<- k
         reldb_l[[k]] <<- list()
         reldb_l[[k]]$publication <<- item["TI"]
         reldb_l[[k]]$author <<- authors
-        reldb_l[[k]]$area <<- areas
         reldb_l[[k]]$venue <<- venues
+        reldb_l[[k]]$area <<- areas
         names(reldb_l)[k] <<- newkeywords[i]
-        reldb_df[[k]] <<- data.frame(relation, entity, quantity, years, stringsAsFactors=FALSE)
+        reldb_df[[k]] <<- data.frame(relation, entity, quantity, year, stringsAsFactors=FALSE)
         names(reldb_df)[k] <<- newkeywords[i]
         k <<- k + 1
     }
@@ -64,9 +64,9 @@ process_item <- function(item) {
         index <- keywordsdb[[oldkeywords[i]]]
         reldb_l[[index]]$publication <<- c(reldb_l[[index]]$publication, item["TI"])
         reldb_l[[index]]$author <<- unique(c(reldb_l[[index]]$author, authors))
-        reldb_l[[index]]$area <<- unique(c(reldb_l[[index]]$area, areas))
         reldb_l[[index]]$venue <<- unique(c(reldb_l[[index]]$venue, venues))
-        reldb_df[[index]] <<- rbind(reldb_df[[index]], data.frame(relation, entity, quantity, years, stringsAsFactors=FALSE))
+        reldb_l[[index]]$area <<- unique(c(reldb_l[[index]]$area, areas))
+        reldb_df[[index]] <<- rbind(reldb_df[[index]], data.frame(relation, entity, quantity, year, stringsAsFactors=FALSE))
     }
     # for(i in seq_along(keywords)) {
     #     index <- keywordsdb[[keywords[i]]]
@@ -102,18 +102,20 @@ apply(d, 1, process_item)
 n = length(ls(keywordsdb))
 
 inputm <- matrix(0, nrow=m, ncol=n*2*rn)
-
+source('relations.R')
 # O(n^2):
 for(i in 1:length(reldb_l)) {
     cat("process ", i, "\n")
     irel = reldb_l[[i]]
+    ki = names(reldb_df)[i]
     for(j in 1:length(reldb_l)) {
         if(i != j) {
             jrel = reldb_l[[j]]
+            kj = names(reldb_df)[j]
             for(r in 1:rn) {
                 rel = relations[r]
-                cooccur = irel[[rel]] %in% jrel[[rel]]
-                v = length(which(cooccur))
+                cooccur = intersect(irel[[rel]], jrel[[rel]])
+                v = length(which(ent.year(ki, cooccur) %in% ent.year(kj, cooccur)))
                 # is there j word in the stored list?
                 im = match(j, inputm[, 2*r-1 + 2*rn*(i-1)])
                 if(!is.na(im)) {

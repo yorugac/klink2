@@ -16,9 +16,9 @@ get.reldf <- function(keyword) {
 }
 
 keyword.index <- function(keyword) {
-    ifelse(is.character(keyword),
-        keywordsdb[[keyword]],
-        as.integer(keyword))
+    if(is.character(keyword))
+        keywordsdb[[keyword]]
+    else as.integer(keyword)
 }
 
 keyword.name <- function(index) {
@@ -60,7 +60,7 @@ keyword.object <- function(k) {
 
 # strength of connection between k1 and k2 in regards to relation rel
 # returns number of co-occurrences in case of unquantified relation and
-# sum of minimum values in case of quantified
+# vector of minimum values in case of quantified
 # rel can be an index or a string in relations
 rel.value <- function(k1, k2, r) {
     if(k1==k2) return(length(rel.entity(k1, r)))
@@ -79,7 +79,7 @@ rel.value <- function(k1, k2, r) {
             yv <- rel.entity(k2, r, ydf)
             yq <- rel.quantity(k2, r, ydf)
             cooccur <- intersect(xv, yv)
-            sum(pmin(xq[which(xv==cooccur)], yq[which(yv==cooccur)]))
+            pmin(xq[which(xv==cooccur)], yq[which(yv==cooccur)])
         } else  {
             inputm[i, 2*rel + 2*rn*(ik1-1)]
         }
@@ -116,18 +116,22 @@ sib <- function(keyword) {
     res
 }
 
+# rel - string
+# returns vector of entities shared by k1 and k2 via relation rel
+common.entities <- function(k1, k2, rel) {
+    rel1 <- reldb_df[[k1]]
+    rel2 <- reldb_df[[k2]]
+    intersect(rel.entity(k1, rel, rel1), rel.entity(k2, rel, rel2))
+}
+
 # total co-occurrence between k1 and k2
 # without inputm
 cooccur <- function(k1, k2) {
-    ik1 <- keyword.index(k1)
-    ik2 <- keyword.index(k2)
-    rel1 <- reldb_df[[k1]]
-    rel2 <- reldb_df[[k2]]
     v <- 0
     for(r in 1:rn) {
         rel = relations[r]
-        cooccur = rel.entity(k1, rel, rel1) %in% rel.entity(k2, rel, rel2)
-        v = v + length(which(cooccur))
+        cooccur = common.entities(k1, k2, rel)
+        v = v + length(common.entities(k1, k2, rel))
     }
     v
 }
@@ -217,10 +221,10 @@ rel.quantity <- function(keyword, relation, reldf=NULL) {
     # get rid of NAs?
 }
 
-# returns year(s) for the given keyword and relation name
-rel.year <- function(keyword, relation, reldf=NULL) {
+# returns year(s) for the given keyword and entities
+ent.year <- function(keyword, entities, reldf=NULL) {
     if(is.null(reldf)) reldf = get.reldf(keyword)
-    as.numeric(reldf[reldf$relation %in% relation,]$year)
+    as.numeric(reldf[reldf$entity %in% entities,]$year)
 }
 
 # when keyword was first used
