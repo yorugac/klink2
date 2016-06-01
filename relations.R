@@ -9,6 +9,19 @@
 
 maxindex <- NULL
 
+prepare.semrel <- function() {
+    for(i in seq_along(semantic)) {
+        semrel[[i]] <<- matrix(, nrow=0, ncol=2)
+    }
+    names(semrel) <<- semantic
+}
+
+fix.semrel <- function() {
+    for(i in seq_along(semantic)) {
+        semrel[[i]] <<- unique(semrel[[i]])
+    }
+}
+
 # returns dataframe with all relations for the given keyword
 get.reldf <- function(keyword) {
     index <- keyword.index(keyword)
@@ -91,7 +104,7 @@ set.semantic <- function(k1, semtype, k2) {
         warning(paste("used unknown semantic relation ", semtype, sep=""))
     ik1 <- keyword.index(k1)
     ik2 <- keyword.index(k2)
-    semrel[[semtype]] <<- unique(rbind(semrel[[semtype]], c(ik1, ik2)))
+    semrel[[semtype]] <<- rbind(semrel[[semtype]], c(ik1, ik2))
 }
 
 # returns keywords that are super according to hierarchical relations
@@ -224,7 +237,7 @@ rel.quantity <- function(keyword, relation, reldf=NULL) {
 # returns year(s) for the given keyword and entities
 ent.year <- function(keyword, entities, reldf=NULL) {
     if(is.null(reldf)) reldf = get.reldf(keyword)
-    as.numeric(reldf[reldf$entity %in% entities,]$year)
+    sort(reldf[reldf$entity %in% entities,]$year)
 }
 
 # when keyword was first used

@@ -151,9 +151,12 @@ infer <- function(x, y) {
 
 # break loops for broaderGeneric
 fix.loops <- function() {
+    fix.semrel()
     if(nrow(semrel[[2]]) > 1)
         semrel[[2]] <<- delete.cycles(semrel[[2]])
 }
+
+fast.expand <- function(v1, v2) cbind(rep.int(v1, length(v2)), rep.int(v2, rep.int(length(v1), length(v2))))
 
 # keywords: list of keyword objects or vector of keyword ids
 distance.matrix <- function(keywords) {
@@ -199,7 +202,7 @@ similar <- function() {
                 if(i != j) {
                     p1 <- which(keywords %in% clusters[[i]])
                     p2 <- which(keywords %in% clusters[[j]])
-                    d[i,j] = sum(distances[as.matrix(expand.grid(p1,p2))])
+                    d[i,j] = sum(distances[fast.expand(p1, p2)])
                 }
             }
         }
@@ -223,6 +226,7 @@ similar <- function() {
     }
     semrel[[4]] <<- matrix(, nrow=0, ncol=2)
     continue <<- TRUE
+    fix.semrel()
 }
 
 harm.mean <- function(x) 1 / mean(1/x)
@@ -258,7 +262,7 @@ quick.clustering <- function(keywords) {
                     p1 <- which(keywords %in% clusters[[i]])
                     p2 <- which(keywords %in% clusters[[j]])
                     w <- rep(sapply(p1, npapers), length(p2))
-                    d[i,j] = sum((w * distances[as.matrix(expand.grid(p1,p2))]) / sum(w))
+                    d[i,j] = sum((w * distances[fast.expand(p1,p2)]) / sum(w))
                 }
             }
         }
@@ -351,13 +355,6 @@ triples <- data.frame(k1=character(0), k2=character(0), relation=numeric(0), str
 semrel <- list()
 # iteration regulator
 continue <- TRUE
-
-prepare.semrel <- function() {
-    for(i in seq_along(semantic)) {
-        semrel[[i]] <<- matrix(, nrow=0, ncol=2)
-    }
-    names(semrel) <<- semantic
-}
 
 klink2 <- function() {
     prepare.semrel()
