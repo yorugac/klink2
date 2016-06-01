@@ -16,7 +16,7 @@ prepare.semrel <- function() {
     names(semrel) <<- semantic
 }
 
-fix.semrel <- function() {
+cleanup.semrel <- function() {
     for(i in seq_along(semantic)) {
         semrel[[i]] <<- unique(semrel[[i]])
     }

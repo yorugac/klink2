@@ -151,7 +151,7 @@ infer <- function(x, y) {
 
 # break loops for broaderGeneric
 fix.loops <- function() {
-    fix.semrel()
+    cleanup.semrel()
     if(nrow(semrel[[2]]) > 1)
         semrel[[2]] <<- delete.cycles(semrel[[2]])
 }
@@ -226,7 +226,7 @@ similar <- function() {
     }
     semrel[[4]] <<- matrix(, nrow=0, ncol=2)
     continue <<- TRUE
-    fix.semrel()
+    cleanup.semrel()
 }
 
 harm.mean <- function(x) 1 / mean(1/x)
