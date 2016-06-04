@@ -2,6 +2,8 @@ source('param.R')
 source("relations.R")
 source("graph.R")
 library(stringi)
+library(hash)
+library(fastcluster)
 
 # Var naming here:
 # r - relation, string
@@ -156,7 +158,9 @@ fix.loops <- function() {
         semrel[[2]] <<- delete.cycles(semrel[[2]])
 }
 
-fast.expand <- function(v1, v2) cbind(rep.int(v1, length(v2)), rep.int(v2, rep.int(length(v1), length(v2))))
+fast.expand <- function(v1, v2)
+    cbind(rep.int(v1, length(v2)),
+          rep.int(v2, rep.int(length(v1), length(v2))))
 
 # keywords: list of keyword objects or vector of keyword ids
 distance.matrix <- function(keywords) {
@@ -180,6 +184,7 @@ distance.matrix <- function(keywords) {
 }
 
 # merge i and j in clusters
+# auxiliary method for hand-written clustering
 merge.cluster <- function(clusters, i, j) {
     ncl <- c(clusters[[i]], clusters[[j]])
     clusters[[i]] = ncl
@@ -193,32 +198,9 @@ similar <- function() {
     keywords <- unique(as.vector(links))
     if(verbosity>=2) cat("mergeSimilarKeywords for", nrow(links), "links or", length(keywords), "keywords.\n")
     if(!length(keywords)) return()
-    distances <- distance.matrix(keywords)
-    clusters <- as.list(keywords)
-    update.dist <- function() {
-        d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
-        for(i in seq_along(clusters)) {
-            for(j in seq_along(clusters)) {
-                if(i != j) {
-                    p1 <- which(keywords %in% clusters[[i]])
-                    p2 <- which(keywords %in% clusters[[j]])
-                    d[i,j] = sum(distances[fast.expand(p1, p2)])
-                }
-            }
-        }
-        diag(d) = Inf
-        d
-    }
-    d <- distances
-    while(TRUE) {
-        i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
-        if(length(i) > 2) i = i[1,]
-        if(length(clusters) > 1 && d[i[1],i[2]] < merge_t) {
-            clusters = merge.cluster(clusters, i[1], i[2])
-            d = update.dist()
-        } else break
-    }
-    for(cl in clusters) {
+    cluster_v <- cutree(hclust(as.dist(distance.matrix(keywords)), method="single"), h=merge_t)
+    for(k in 1:max(cluster_v)) {
+        cl = which(cluster_v == k)
         for(i in cl)
             for(j in cl)
                 if(i!=j) set.semantic(i, semantic[1], j)
@@ -253,14 +235,15 @@ gen.pseudos <- function(k, clusters) {
 quick.clustering <- function(keywords) {
     if(length(keywords) <= 1) return(list())
     distances <- distance.matrix(keywords)
+    indh <- hash(keywords, 1:ncol(distances))
     clusters <- as.list(keywords)
     update.dist <- function(keywords) {
         d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
         for(i in seq_along(clusters)) {
             for(j in seq_along(clusters)) {
                 if(i != j) {
-                    p1 <- which(keywords %in% clusters[[i]])
-                    p2 <- which(keywords %in% clusters[[j]])
+                    p1 <- values(indh, keys=clusters[[i]])
+                    p2 <- values(indh, keys=clusters[[j]])
                     w <- rep(sapply(p1, npapers), length(p2))
                     d[i,j] = sum((w * distances[fast.expand(p1,p2)]) / sum(w))
                 }
