@@ -199,13 +199,15 @@ similar <- function() {
     if(verbosity>=2) cat("mergeSimilarKeywords for", nrow(links), "links or", length(keywords), "keywords.\n")
     if(!length(keywords)) return()
     cluster_v <- cutree(hclust(as.dist(distance.matrix(keywords)), method="single"), h=merge_t)
-    for(k in 1:max(cluster_v)) {
+    ncluster <- max(cluster_v)
+    for(k in 1:ncluster) {
         cl = which(cluster_v == k)
         for(i in cl)
             for(j in cl)
                 if(i!=j) set.semantic(i, semantic[1], j)
         merge.keywords(cl)
     }
+    if(verbosity>=2) cat("Merging resulted in", ncluster, "clusters.\n")
     semrel[[4]] <<- matrix(, nrow=0, ncol=2)
     continue <<- TRUE
     cleanup.semrel()
@@ -266,6 +268,7 @@ quick.clustering <- function(keywords) {
 
 # ambk - potentially ambiguous keyword
 # keywords - set of related to k keywords to clusterize
+# returns whether split happened or not
 intersect.clustering <- function(ambk, keywords) {
     k = keyword.index(ambk)
     clusters <- as.list(keywords)
@@ -292,21 +295,26 @@ intersect.clustering <- function(ambk, keywords) {
         delete.keyword(k)
         # split was done
         continue <<- TRUE
+        return(TRUE)
     }
+    FALSE
 }
 
 # splitAmbiguousKeywords
 ambiguous <- function() {
     if(verbosity>=2) cat("Seeking ambiguous keywords.\n")
+    totalsplit <- 0
     for(k in all.keywords()) {
         if(verbosity>=3) cat("splitAmbiguousKeywords for", k, "\n")
         rk <- related.keywords(k, threshold=relkeyT * 2)
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
             if(verbosity>=3) cat("intersect clustering: #clusters =", length(clusters), "\n")
-            intersect.clustering(k, rk)
+            s <- intersect.clustering(k, rk)
+            if(s) totalsplit = totalsplit + 1
         }
     }
+    if(verbosity>=2) cat("Splitting was done", totalsplit, "times.\n")
 }
 
 # filterNotAcademicKeywords

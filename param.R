@@ -15,17 +15,16 @@ rn <- length(relations)
 # verbosity level
 # 0 - no messages
 # 1 - main statistics per iteration
-# 2 - notifications for the start of key procedures
+# 2 - notifications for the start and end of key procedures
 # 3 - word-by-word messaging
 verbosity <- 2
 
 # what is the minimum connection strength for keywords to be considered related?
 relkeyT <- 1
 
+## metric params
 # weights for linear combination of n measure (string similarity)
 nweights <- c(1, 1, 1, 1)
-
-## metric params
 # threshold for hierarchical metrics
 tR <- c(1, 1, 1, 1)
 # threshold for hierarchical indicators, i.e. how many should point in the same direction

@@ -43,7 +43,7 @@ process_item <- function(item) {
     authors <- unlist(sapply(strsplit(item["AU"], ";"), trimws))
     areas <- unique(unlist(sapply(strsplit(tolower(item["SC"]), ";"), trimws)))
     venues <- tolower(item["SO"])
-    relation <- c("publication", rep("author", length(authors)), "venue", rep("area", length(areas)))
+    relation <- factor(c("publication", rep("author", length(authors)), "venue", rep("area", length(areas))))
     entity <- c(item["TI"], authors, venues, areas)
     quantity <- rep(NA_integer_, length(entity))
     year <- as.numeric(rep(item["PY"], length(entity)))

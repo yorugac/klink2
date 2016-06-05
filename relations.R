@@ -224,7 +224,7 @@ npapers <- function(keyword) {
 # returns entity(s) for the given keyword and relation name
 rel.entity <- function(keyword, relation, reldf=NULL) {
     if(is.null(reldf)) reldf = get.reldf(keyword)
-    reldf[reldf$relation %in% relation,]$entity
+    reldf[reldf$relation == relation,]$entity
 }
 
 # returns quantity(s) for the given keyword and relation name
