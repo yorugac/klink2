@@ -14,11 +14,11 @@ library(fastcluster)
 I.prob <- function(r, x, y, diachronic=FALSE) {
     v <- rel.value(x, y, r)
     if(v==0) return(0)
-    if(!quantified[relation.index(r)]) v = rep(1, v)
-    if(diachronic) {
+    if(!quantified[relation.index(r)] && diachronic) {
         ce <- common.entities(x, y, r)
-        v = v * ((ent.year(y, ce) - min(ent.year(x, ce)) + 1)^(-gamma))[1:length(v)]
+        v = v * ((ent.year(y, ce) - min(ent.year(x, ce)) + 1)^(-gamma))
     }
+    # TODO quantified relation
     sum(v)
 }
 
@@ -201,7 +201,7 @@ similar <- function() {
     cluster_v <- cutree(hclust(as.dist(distance.matrix(keywords)), method="single"), h=merge_t)
     ncluster <- max(cluster_v)
     for(k in 1:ncluster) {
-        cl = which(cluster_v == k)
+        cl = keywords[which(cluster_v == k)]
         for(i in cl)
             for(j in cl)
                 if(i!=j) set.semantic(i, semantic[1], j)
@@ -246,7 +246,7 @@ quick.clustering <- function(keywords) {
                 if(i != j) {
                     p1 <- values(indh, keys=clusters[[i]])
                     p2 <- values(indh, keys=clusters[[j]])
-                    w <- rep(sapply(p1, npapers), length(p2))
+                    w <- rep(sapply(clusters[[i]], npapers), length(clusters[[j]]))
                     d[i,j] = sum((w * distances[fast.expand(p1,p2)]) / sum(w))
                 }
             }

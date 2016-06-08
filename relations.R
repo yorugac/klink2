@@ -1,6 +1,6 @@
 # Handling keywords and their relations; internal functions behind Klink-2.
 
-# It is assumed that there are global objects keywordsdb, reldb_df and inputm
+# It is assumed that there are global objects keywordsdb, reldb_df, reldb_l and inputm
 # that hold all the keywords, relations and co-occurrences calculations;
 # as well as semrel and triples for output.
 #
@@ -68,7 +68,46 @@ keyword.object <- function(k) {
         rel=inputm[, 2*1:rn + 2*rn*(ik-1)],
         super=super(ik),
         sib=sib(ik),
-        df=NULL)
+        df=NULL,
+        rellist=NULL)
+}
+
+# calculation of m largest co-occurrences for keyword i and relation rname;
+# compares i against all existin keywords.
+# Returns matrix with column of indexes and column of values.
+# rname - relation name
+# i - keyword index
+# irel_l - object of reldb_l for i
+# irel_df - object reldb_df for i
+calc.cooccurrence <- function(rname, i, irel_l, irel_df=NULL) {
+    if(is.null(irel_df)) irel_df <- get.reldf(i)
+    m <- nrow(inputm)
+    res <- matrix(0, nrow=m, ncol=2)
+    for(jk in all.keywords()) {
+        j <- keyword.index(jk)
+        if(i != j) {
+            jrel_l <- reldb_l[[j]]
+            cooccur <- intersect(irel_l[[rname]], jrel_l[[rname]])
+            value <- length(which(ent.year(i, cooccur, irel_df) %in% ent.year(j, cooccur)))
+            # is there j word in the stored list?
+            im <- match(j, res[,1])
+            if(!is.na(im)) {
+                res[im,2] = res[im,2] + value
+            } else {
+                # is there place in the stored list for the value with j?
+                im = which.min(res[,2])
+                if(value > res[im,2]) {
+                     res[im,1] = j
+                     res[im,2] = value
+                }
+            }
+        }
+    }
+    # sorting in decreasing order of relation values
+    ind <- order(res[,2], decreasing=TRUE)
+    res[,1] = res[ind,1]
+    res[,2] = res[ind,2]
+    res
 }
 
 # strength of connection between k1 and k2 in regards to relation rel
@@ -263,6 +302,7 @@ merge.keywords <- function(cluster) {
     newk <- paste(keyword.name(cluster[1]), " merged", sep="")
     index <- new.index()
     rel <- get.reldf(cluster[1])
+    rel_l <- list()
     for(k in 2:length(cluster)) {
         rel = rbind(rel, get.reldf(cluster[k]))
     }
@@ -277,9 +317,12 @@ merge.keywords <- function(cluster) {
             inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn))
         inputm[, 2*r-1 + 2*rn*(index-1)] <<- iv
         inputm[, 2*r + 2*rn*(index-1)] <<- v
+        rel_l[[relations[r]]] = rel.entity(newk, relations[r], rel)
     }
     reldb_df[[index]] <<- rel
     names(reldb_df)[index] <<- newk
+    reldb_l[[index]] <<- rel_l
+    names(reldb_l)[index] <<- newk
     keywordsdb[[newk]] <<- index
     for(k in cluster) delete.keyword(k)
 }
@@ -301,47 +344,28 @@ intersect.reldf <- function(keyword, cluster) {
 # keyword - ambiguous keyword
 # returns keyword object
 create.pseudo <- function(keyword, cluster) {
-    reldf <- intersect.reldf(keyword, cluster)
+    rel_df <- intersect.reldf(keyword, cluster)
     m <- nrow(inputm)
     rel <- matrix(0, nrow=m, ncol=rn)
     irel <- matrix(0, nrow=m, ncol=rn)
+    rel_l <- list()
 
     # NOTE: a full re-calculation of co-occurrence values
     for(r in 1:rn) {
-        v <- rep(0, m)
-        iv <- rep(0, m)
-        rname = relations[r]
-        for(k in all.keywords()) {
-            j = keyword.index(k)
-            jdf = reldb_df[[j]]
-            # TODO: no quantities, refactor
-            xv <- rel.entity("", rname, reldf)
-            yv <- rel.entity("", rname, jdf)
-            cooccur <- intersect(xv, yv)
-            value = length(cooccur)
-            # is there j word in the stored list?
-            im = match(j, iv)
-            if(!is.na(im)) {
-                v[im] = v[im] + value
-            } else {
-                # is there place in the stored list for the value with j?
-                im = which.min(v)
-                if(value > v[im]) {
-                     iv[im] = j
-                     v[im] = value
-                }
-            }
-        }
-        ind <- order(v, decreasing=TRUE)
-        rel[,r] = v[ind]
-        irel[,r] = iv[ind]
+        rname <- relations[r]
+        # index does not matter here since it is a pseudo keyword and data frame is provided
+        rel_l[[rname]] = rel.entity(1, rname, rel_df)
+        co_m <- calc.cooccurrence(rname, 1, rel_l, rel_df)
+        irel[,r] = co_m[,1]
+        rel[,r] = co_m[,2]
     }
     cluster = c(keyword, cluster)
     list(irel=irel,
         rel=rel,
         super=unique(unlist(lapply(cluster, super))),
         sib=unique(unlist(lapply(cluster, sib))),
-        df=reldf)
+        df=rel_df,
+        rellist=rel_l)
 }
 
 # ko - keyword object
@@ -357,7 +381,9 @@ add.pseudo <- function(ko, name, cluster) {
         inputm[, 2*r + 2*rn*(index-1)] <<- ko$rel[,r]
     }
     reldb_df[[index]] <<- ko$df
+    reldb_l[[index]] <<- ko$rellist
     names(reldb_df)[index] <<- name
+    names(reldb_l)[index] <<- name
     keywordsdb[[name]] <<- index
     index
 }
@@ -395,4 +421,7 @@ delete.keyword <- function(keyword) {
     # rm(list=k, envir=keywordsdb)
     # cannot delete element of reldb_df, instead:
     names(reldb_df)[ik] <<- NA
+    names(reldb_l)[ik] <<- NA
+    reldb_df[[ik]] <<- NA
+    reldb_l[[ik]] <<- NA
 }

@@ -68,32 +68,6 @@ process_item <- function(item) {
         reldb_l[[index]]$area <<- unique(c(reldb_l[[index]]$area, areas))
         reldb_df[[index]] <<- rbind(reldb_df[[index]], data.frame(relation, entity, quantity, year, stringsAsFactors=FALSE))
     }
-    # for(i in seq_along(keywords)) {
-    #     index <- keywordsdb[[keywords[i]]]
-    #     for(j in seq_along(keywords)){
-    #         if(i != j) {
-    #             jindex <- keywordsdb[[keywords[j]]]
-    #             # publication relation
-    #             r <- 1
-    #
-    #             # is there j word in the stored list?
-    #             jm = match(j, inputm[, 2*r-1 + 2*rn*(i-1)])
-    #             if(!is.na(jm)) {
-    #                 inputm[jm, 2*r + 2*rn*(i-1)] <<- inputm[jm, 2*r + 2*rn*(i-1)] + 1
-    #             } else {
-    #                 # is there any 0 values to store publication with j?
-    #                 jm = match(0, inputm[, 2*r + 2*rn*(i-1)])
-    #                 if(!is.na(jm)) {
-    #                      inputm[jm, 2*r-1 + 2*rn*(i-1)] <<- j
-    #                      inputm[jm, 2*r + 2*rn*(i-1)] <<- 1
-    #                 }
-    #             }
-    #         }
-    #     }
-    # }
-    # if(k == n) {
-    #     inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=n*2*rn))
-    # }
 }
 
 apply(d, 1, process_item)
@@ -107,29 +81,11 @@ source('relations.R')
 for(i in 1:length(reldb_l)) {
     cat("process ", i, "\n")
     irel = reldb_l[[i]]
-    ki = names(reldb_df)[i]
-    for(j in 1:length(reldb_l)) {
-        if(i != j) {
-            jrel = reldb_l[[j]]
-            kj = names(reldb_df)[j]
-            for(r in 1:rn) {
-                rel = relations[r]
-                cooccur = intersect(irel[[rel]], jrel[[rel]])
-                v = length(which(ent.year(ki, cooccur) %in% ent.year(kj, cooccur)))
-                # is there j word in the stored list?
-                im = match(j, inputm[, 2*r-1 + 2*rn*(i-1)])
-                if(!is.na(im)) {
-                    inputm[im, 2*r + 2*rn*(i-1)] = inputm[im, 2*r + 2*rn*(i-1)] + v
-                } else {
-                    # is there place in the store list for the value with j?
-                    im = which.min(inputm[, 2*r + 2*rn*(i-1)])
-                    if(v > inputm[im, 2*r + 2*rn*(i-1)]) {
-                         inputm[im, 2*r-1 + 2*rn*(i-1)] = j
-                         inputm[im, 2*r + 2*rn*(i-1)] = v
-                    }
-                }
-            }
-        }
+    for(r in 1:rn) {
+        rname <- relations[r]
+        co_m <- calc.cooccurrence(rname, i, irel)
+        inputm[, 2*r-1 + 2*rn*(i-1)] = co_m[,1]
+        inputm[, 2*r + 2*rn*(i-1)] = co_m[,2]
     }
 }
 # sorting in decreasing order of relation values
@@ -138,4 +94,4 @@ for(i in seq(1,ncol(inputm)-1,by=2)) {
     inputm[, i] = inputm[, i][ind]
     inputm[, i+1] = inputm[, i+1][ind]
 }
-save('reldb_df', 'keywordsdb', 'inputm', file="input5000.Rdata")
+save('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', file="input5000.Rdata")
