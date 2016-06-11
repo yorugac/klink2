@@ -5,6 +5,10 @@ library(stringi)
 library(hash)
 library(fastcluster)
 
+library(doParallel)
+library(foreach)
+export_symbols <- c("keywordsdb", "reldb_df", "reldb_l", "inputm")
+
 # Var naming here:
 # r - relation, string
 # k, x, y - keywords, string
@@ -347,34 +351,37 @@ semrel <- list()
 # iteration regulator
 continue <- TRUE
 
-klink2 <- function() {
-    prepare.semrel()
 
-    split_merge <- TRUE
-    iter <- 1
-    while(continue) {
-        if(verbosity>=1) cat("Iteration", iter, "\nNumber of keywords =", nkeywords(), "\n")
-        if(verbosity>=2) cat("Keyword inference.\n")
-        # set to true only if there was splitting / merging done
-        continue <<- FALSE
-        for(k in all.keywords()) {
-            if(verbosity>=3) cat("Infering keyword:", k, "\n")
-            rk <- related.keywords(k)
-            for(k2 in rk) {
-                infer(k, keyword.name(k2))
-            }
+prepare.semrel()
+ncores <- detectCores() - 1
+cl <- makeCluster(ncores)
+registerDoParallel(cl, cores=ncores)
+
+split_merge <- TRUE
+iter <- 1
+while(continue) {
+    if(verbosity>=1) cat("Iteration", iter, "\nNumber of keywords =", nkeywords(), "\n")
+    if(verbosity>=2) cat("Keyword inference.\n")
+    # set to true only if there was splitting / merging done
+    continue <<- FALSE
+    foreach(k=iter(all.keywords()), .packages="stringi")  %dopar% {
+        if(verbosity>=3) cat("Infering keyword:", k, "\n")
+        rk <- related.keywords(k)
+        for(k2 in rk) {
+            infer(k, keyword.name(k2))
         }
-        fix.loops()
-        if(verbosity>=1)
-            cat("Number of working semantic relations after inference:\n\trelatedEquivalent: ", nrow(semrel[[1]]),
-                "\n\tbroaderGeneric: ", nrow(semrel[[2]]), "\n\tcontributesTo:", nrow(semrel[[3]]),
-                "\n\tsimilarityLink:", nrow(semrel[[4]]), "\n")
-        if(split_merge)
-            ambiguous()
-        else
-            similar()
-        split_merge = !split_merge
-        iter = iter + 1
     }
-    academic()
+    fix.loops()
+    if(verbosity>=1)
+        cat("Number of working semantic relations after inference:\n\trelatedEquivalent: ", nrow(semrel[[1]]),
+            "\n\tbroaderGeneric: ", nrow(semrel[[2]]), "\n\tcontributesTo:", nrow(semrel[[3]]),
+            "\n\tsimilarityLink:", nrow(semrel[[4]]), "\n")
+    if(split_merge)
+        ambiguous()
+    else
+        similar()
+    split_merge = !split_merge
+    iter = iter + 1
 }
+academic()
+stopCluster(cl)
