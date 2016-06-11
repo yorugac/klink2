@@ -1,5 +1,7 @@
-# three semantic relations according to Klink-2 paper
-# similarityLink is a temporal structure for computation of relatedEquivalent
+# Three semantic relations according to Klink-2 paper:
+# relatedEquivalent - similarity relation and
+# broaderGeneric and contributesTo - hierarchical relations.
+# similarityLink is a temporal relation for computation of relatedEquivalent.
 semantic <- c("relatedEquivalent", "broaderGeneric", "contributesTo", "similarityLink")
 
 # Input relations taken into consideration:
@@ -12,20 +14,23 @@ relations <- c("publication", "author", "venue", "area")
 quantified <- c(FALSE, FALSE, FALSE, FALSE)
 rn <- length(relations)
 
-# verbosity level
+# Verbosity level
 # 0 - no messages
 # 1 - main statistics per iteration
 # 2 - notifications for the start and end of key procedures
 # 3 - word-by-word messaging
 verbosity <- 2
 
-# what is the minimum connection strength for keywords to be considered related?
+# Related keywords
+# what is the minimum connection strength for keywords to be considered related
+# during klink2 run?
 relkeyT <- 1
 
-## metric params
-# weights for linear combination of n measure (string similarity)
+## Metric params
+# weights for linear combination of n measure (string similarity) which is based on
+# longest common words, identical words, common characters, presence of acronyms
 nweights <- c(1, 1, 1, 1)
-# threshold for hierarchical metrics
+# threshold for hierarchical metrics, different for each input relation
 tR <- c(1, 1, 1, 1)
 # threshold for hierarchical indicators, i.e. how many should point in the same direction
 th <- 2
@@ -36,7 +41,7 @@ tre <- 2
 # coefficient for T metric
 gamma <- 2 # must be > 0
 
-## clustering params
+## Clustering params
 # clustering threshold for mergeSimilarWords
 merge_t <- 2
 # clustering threshold for intersectBasedClustering
@@ -44,7 +49,7 @@ intersect_t <- 1
 # clustering threshold for quickHierarchicalClustering
 quick_t <- 0.8
 
-## filter params
+## Filter params
 # number of main keywords
 nmain <- 20
 # co-occurrence coverage by main keywords
