@@ -12,4 +12,4 @@ load('input.Rdata') # objects with pre-processed input data
 klink2()
 ```
 
-4. triples object will contain output semantic relations.
+triples object will contain output semantic relations.

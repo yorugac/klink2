@@ -79,11 +79,11 @@ keyword.object <- function(k) {
 # i - keyword index
 # irel_l - object of reldb_l for i
 # irel_df - object reldb_df for i
-calc.cooccurrence <- function(rname, i, irel_l, irel_df=NULL) {
+calc.cooccurrence <- function(rname, i, irel_l, irel_df=NULL, words=all.keywords()) {
     if(is.null(irel_df)) irel_df <- get.reldf(i)
     m <- nrow(inputm)
     res <- matrix(0, nrow=m, ncol=2)
-    for(jk in all.keywords()) {
+    for(jk in words) {
         j <- keyword.index(jk)
         if(i != j) {
             jrel_l <- reldb_l[[j]]
@@ -340,6 +340,7 @@ intersect.reldf <- function(keyword, cluster) {
     relk[relk$entity %in% entities,]
 }
 
+
 # creates pseudo-keyword from cluster (set of ids) of keywords
 # keyword - ambiguous keyword
 # returns keyword object
@@ -349,13 +350,15 @@ create.pseudo <- function(keyword, cluster) {
     rel <- matrix(0, nrow=m, ncol=rn)
     irel <- matrix(0, nrow=m, ncol=rn)
     rel_l <- list()
+    words <- unique(unlist(lapply(c(keyword.index(keyword), cluster), related.keywords, threshold=0)))
 
     # NOTE: a full re-calculation of co-occurrence values
     for(r in 1:rn) {
         rname <- relations[r]
         # index does not matter here since it is a pseudo keyword and data frame is provided
         rel_l[[rname]] = rel.entity(1, rname, rel_df)
-        co_m <- calc.cooccurrence(rname, 1, rel_l, rel_df)
+        # NOTE: not full cooccurrence calculation
+        co_m <- calc.cooccurrence(rname, 1, rel_l, irel_df=rel_df, words=words)
         irel[,r] = co_m[,1]
         rel[,r] = co_m[,2]
     }
