@@ -8,17 +8,27 @@
 # can be checked with keyword.exists -- whether there is a name for it in reldb_df.
 
 maxindex <- NULL
+zeromatrix <- NULL # used for semrel structure growth
+
+semantic.index <- function(semtype) {
+    if(is.character(semtype)) semtype = which(semantic == semtype)
+    as.integer(semtype)
+}
 
 prepare.semrel <- function() {
+    zeromatrix <<- matrix(0, nrow=nkeywords()*2, ncol=2)
     for(i in seq_along(semantic)) {
-        semrel[[i]] <<- matrix(, nrow=0, ncol=2)
+        semrel[[i]] <<- zeromatrix
     }
     names(semrel) <<- semantic
+    semrel$sizes <<- rep(0, length(semantic))
 }
 
 cleanup.semrel <- function() {
     for(i in seq_along(semantic)) {
-        semrel[[i]] <<- unique(semrel[[i]])
+        t <- unique(get.semantic(i))
+        semrel[[i]] <<- rbind(t, matrix(0, nrow=nkeywords()*2, ncol=2))
+        semrel$sizes[i] <<- nrow(t)
     }
 }
 
@@ -138,33 +148,52 @@ rel.value <- function(k1, k2, r) {
     }
 }
 
+# returns matrix of all working relations for semtype
+get.semantic <- function(semtype) {
+    i <- semantic.index(semtype)
+    size <- semrel$sizes[i]
+    if(size == 0) matrix(, nrow=0, ncol=2)
+    else matrix(semrel[[i]][1:size, ], ncol=2)
+    # additional matrix call to ensure that size=1 is returned as matrix, not vector
+}
+
 set.semantic <- function(k1, semtype, k2) {
-    if(!semtype %in% semantic)
-        warning(paste("used unknown semantic relation ", semtype, sep=""))
+    i <- semantic.index(semtype)
     ik1 <- keyword.index(k1)
     ik2 <- keyword.index(k2)
-    semrel[[semtype]] <<- rbind(semrel[[semtype]], c(ik1, ik2))
+    prevsize <- semrel$sizes[i]
+    s <- prevsize + 1
+    # check if there is place to put new relation
+    if(s >= nrow(semrel[[i]])) {
+        semrel[[i]] <<- rbind(semrel[[i]][1:prevsize, ], c(ik1, ik2), zeromatrix)
+    } else {
+        semrel[[i]][s, ] <<- c(ik1, ik2)
+    }
+    semrel$sizes[i] <<- s
 }
 
 # returns keywords that are super according to hierarchical relations
 super <- function(keyword) {
     ik <- keyword.index(keyword)
-    ibr <- which(ik == semrel[[2]][,1])
-    ict <- which(ik == semrel[[3]][,2])
+    semmatrix2 <- get.semantic(2)
+    semmatrix3 <- get.semantic(3)
+    ibr <- which(ik == semmatrix2[,1])
+    ict <- which(ik == semmatrix3[,2])
     res <- c()
-    if(length(ibr)) res = c(res, semrel[[2]][ibr, 2])
-    if(length(ict)) res = c(res, semrel[[3]][ict, 1])
+    if(length(ibr)) res = c(res, semmatrix2[ibr, 2])
+    if(length(ict)) res = c(res, semmatrix3[ict, 1])
     res
 }
 
 # returns keywords that are siblings according to similarity relation
 sib <- function(keyword) {
     ik <- keyword.index(keyword)
-    ire1 <- which(ik == semrel[[1]][,1])
-    ire2 <- which(ik == semrel[[1]][,2])
+    semmatrix <- get.semantic(1)
+    ire1 <- which(ik == semmatrix[,1])
+    ire2 <- which(ik == semmatrix[,2])
     res <- c()
-    if(length(ire1)) res = c(res, semrel[[1]][ire1, 2])
-    if(length(ire2)) res = c(res, semrel[[1]][ire2, 1])
+    if(length(ire1)) res = c(res, semmatrix[ire1, 2])
+    if(length(ire2)) res = c(res, semmatrix[ire2, 1])
     res
 }
 
@@ -402,23 +431,33 @@ delete.keyword <- function(keyword) {
         k = keyword.name(keyword)
         ik <- keyword.index(keyword)
     }
-    for(i in seq_along(semrel)) {
-        nsemrel <- nrow(semrel[[i]])
-        if(!is.null(nsemrel) && nsemrel > 0) {
+    for(i in seq_along(semantic)) {
+        if(semrel$sizes[i] > 0) {
             todel <- c()
-            for(r in 1:nrow(semrel[[i]]))
-                if(any(semrel[[i]][r,]==ik)) todel = c(todel, r)
+            semmatrix <- get.semantic(i)
+            for(r in 1:nrow(semmatrix))
+                if(any(semmatrix[r, ] == ik)) todel = c(todel, r)
             if(i < 4) {
                 # preserve three semantic relations
                 triples <<- rbind(triples, data.frame(list(
-                    k1=sapply(semrel[[i]][todel,1], keyword.name),
-                    k2=sapply(semrel[[i]][todel,2], keyword.name),
+                    k1=sapply(semmatrix[todel, 1], keyword.name),
+                    k2=sapply(semmatrix[todel, 2], keyword.name),
                     relation=rep(i, length(todel))), stringsAsFactors=FALSE))
             }
-            if(length(todel) > 0) semrel[[i]] <<- semrel[[i]][-todel,]
+            if(length(todel) > 0) {
+                semmatrix = semmatrix[-todel,]
+                semrel[[i]][] <<- 0
+                if(length(semmatrix) == 2) {
+                    semrel[[i]][1, ] <<- semmatrix
+                    semrel$sizes[i] <<- 1
+                } else if(length(semmatrix) == 0) {
+                    semrel$sizes[i] <<- 0
+                } else { # nrow(semmatrix) > 1
+                    semrel[[i]][1:nrow(semmatrix), ] <<- semmatrix
+                    semrel$sizes[i] <<- nrow(semmatrix)
+                }
+            }
         }
-        if(length(semrel[[i]]) < 3)
-            dim(semrel[[i]]) <<- c(length(semrel[[i]])/2, 2)
     }
 
     # rm(list=k, envir=keywordsdb)

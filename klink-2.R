@@ -154,8 +154,12 @@ infer <- function(x, y) {
 # break loops for broaderGeneric
 fix.loops <- function() {
     cleanup.semrel()
-    if(nrow(semrel[[2]]) > 1)
-        semrel[[2]] <<- delete.cycles(semrel[[2]])
+    semmatrix <- get.semantic(2)
+    if(nrow(semmatrix) > 1) {
+        semmatrix = delete.cycles(semmatrix)
+        semrel[[2]][1:nrow(semmatrix), ] <<- semmatrix
+        semrel$sizes[2] <<- nrow(semmatrix)
+    }
 }
 
 fast.expand <- function(v1, v2)
@@ -194,23 +198,30 @@ merge.cluster <- function(clusters, i, j) {
 
 # mergeSimilarKeywords
 similar <- function() {
-    links <- semrel[[4]]
+    # similarityLink - candidates for relatedEquivalent
+    links <- get.semantic(4)
     keywords <- unique(as.vector(links))
     if(verbosity>=2) cat("mergeSimilarKeywords for", nrow(links), "links or", length(keywords), "keywords.\n")
     if(!length(keywords)) return()
+
     cluster_v <- cutree(hclust(as.dist(distance.matrix(keywords)), method="single"), h=merge_t)
-    ncluster <- max(cluster_v)
-    for(k in 1:ncluster) {
+    nclusters <- max(cluster_v)
+    for(k in 1:nclusters) {
         cl = keywords[which(cluster_v == k)]
-        for(i in cl)
-            for(j in cl)
-                if(i!=j) set.semantic(i, semantic[1], j)
+        # relatedEquivalent relation is a symmetric one
+        pairs <- combn(cl, 2)
+        for(i in 1:ncol(pairs))
+            set.semantic(pairs[1, i], semantic[1], pairs[2, i])
         merge.keywords(cl)
     }
-    if(verbosity>=2) cat("Merging resulted in", ncluster, "clusters.\n")
-    semrel[[4]] <<- matrix(, nrow=0, ncol=2)
-    continue <<- TRUE
+    if(verbosity>=2) cat("Merging resulted in", nclusters, "clusters.\n")
+
+    # reset similarityLink
+    semrel[[4]][1:nrow(links), ] <<- 0
+    semrel$sizes[4] <<- 0
     cleanup.semrel()
+
+    continue <<- TRUE
 }
 
 harm.mean <- function(x) 1 / mean(1/x)
@@ -366,9 +377,10 @@ klink2 <- function() {
         }
         fix.loops()
         if(verbosity>=1)
-            cat("Number of working semantic relations after inference:\n\trelatedEquivalent: ", nrow(semrel[[1]]),
-                "\n\tbroaderGeneric: ", nrow(semrel[[2]]), "\n\tcontributesTo:", nrow(semrel[[3]]),
-                "\n\tsimilarityLink:", nrow(semrel[[4]]), "\n")
+            cat("Number of working semantic relations after inference:\n\trelatedEquivalent: ", semrel$sizes[1],
+                    "\n\tbroaderGeneric: ", semrel$sizes[2],
+                    "\n\tcontributesTo:", semrel$sizes[3],
+                    "\n\tsimilarityLink:", semrel$sizes[4], "\n")
         if(split_merge)
             ambiguous()
         else
