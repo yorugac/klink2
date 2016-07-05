@@ -351,6 +351,14 @@ academic <- function() {
     # 3: only one source at the moment, so no need
 }
 
+# empties global output variables
+prepare.globals <- function() {
+    triples <<- data.frame(k1=character(0), k2=character(0), relation=numeric(0), stringsAsFactors=FALSE)
+    semrel <<- list()
+    prepare.semrel()
+    continue <<- TRUE
+}
+
 # output semantic relations
 triples <- data.frame(k1=character(0), k2=character(0), relation=numeric(0), stringsAsFactors=FALSE)
 # working semantic relations
@@ -359,7 +367,8 @@ semrel <- list()
 continue <- TRUE
 
 klink2 <- function() {
-    prepare.semrel()
+    # ensure correctness of output variables
+    prepare.globals()
 
     split_merge <- TRUE
     iter <- 1
