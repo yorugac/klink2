@@ -9,6 +9,13 @@ library(fastcluster)
 # r - relation, string
 # k, x, y - keywords, string
 
+# output semantic relations
+triples <- data.frame(k1=character(0), k2=character(0), relation=numeric(0), stringsAsFactors=FALSE)
+# working semantic relations
+semrel <- list()
+# iteration regulator
+continue <- TRUE
+
 # I_r(x,y) conditional probability that
 # an element associated with x will be associated with y
 I.prob <- function(r, x, y, diachronic=FALSE) {
@@ -208,10 +215,9 @@ similar <- function() {
     nclusters <- max(cluster_v)
     for(k in 1:nclusters) {
         cl = keywords[which(cluster_v == k)]
-        # relatedEquivalent relation is a symmetric one
         pairs <- combn(cl, 2)
-        for(i in 1:ncol(pairs))
-            set.semantic(pairs[1, i], semantic[1], pairs[2, i])
+        # relatedEquivalent relation is a symmetric one
+        set.semantic(pairs[1, ], semantic[1], pairs[2, ])
         merge.keywords(cl)
     }
     if(verbosity>=2) cat("Merging resulted in", nclusters, "clusters.\n")
@@ -358,13 +364,6 @@ prepare.globals <- function() {
     prepare.semrel()
     continue <<- TRUE
 }
-
-# output semantic relations
-triples <- data.frame(k1=character(0), k2=character(0), relation=numeric(0), stringsAsFactors=FALSE)
-# working semantic relations
-semrel <- list()
-# iteration regulator
-continue <- TRUE
 
 klink2 <- function() {
     # ensure correctness of output variables

@@ -157,17 +157,21 @@ get.semantic <- function(semtype) {
     # additional matrix call to ensure that size=1 is returned as matrix, not vector
 }
 
+# k1 and k2 can be vectors
 set.semantic <- function(k1, semtype, k2) {
+    if(length(k1) != length(k2)) stop("set.semantic got vectors of different size")
+
     i <- semantic.index(semtype)
-    ik1 <- keyword.index(k1)
-    ik2 <- keyword.index(k2)
+    ik1 <- sapply(k1, keyword.index)
+    ik2 <- sapply(k2, keyword.index)
     prevsize <- semrel$sizes[i]
-    s <- prevsize + 1
+    s <- prevsize + length(ik1)
     # check if there is place to put new relation
     if(s >= nrow(semrel[[i]])) {
-        semrel[[i]] <<- rbind(semrel[[i]][1:prevsize, ], c(ik1, ik2), zeromatrix)
+        semrel[[i]] <<- rbind(semrel[[i]][1:prevsize, ], matrix(c(ik1, ik2), ncol=2), zeromatrix)
     } else {
-        semrel[[i]][s, ] <<- c(ik1, ik2)
+        semrel[[i]][(prevsize+1):s, 1] <<- ik1
+        semrel[[i]][(prevsize+1):s, 2] <<- ik2
     }
     semrel$sizes[i] <<- s
 }
