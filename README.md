@@ -1,6 +1,6 @@
 ## Usage
 
-1. Process data into input.Rdata with input.R or similar tool.
+1. Process data into input.Rdata with input.R or similar tool. The output is Rdata file that contains objects with pre-processed input data.
 
 2. Modify parameters in param.R.
 
@@ -8,8 +8,7 @@
 
 ```
 source('klink-2.R')
-load('input.Rdata') # objects with pre-processed input data
-klink2()
+klink2('input.Rdata')
 ```
 
 triples object will contain output semantic relations.

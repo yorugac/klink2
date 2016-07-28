@@ -31,23 +31,23 @@ relkeyT <- 1
 # longest common words, identical words, common characters, presence of acronyms
 nweights <- c(1, 1, 1, 1)
 # threshold for hierarchical metrics, different for each input relation
-tR <- c(1, 1, 1, 1)
+tR <- c(3, 3, 3, 3)
 # threshold for hierarchical indicators, i.e. how many should point in the same direction
 th <- 2
 # threshold for relatedEquivalent metric
-tS <- 0.5
+tS <- 0.95
 # threshold for relatedEquivalent indicators, i.e. how many should be positive
 tre <- 2
 # coefficient for T metric
 gamma <- 2 # must be > 0
 
-## Clustering params
+## Clustering params; belong to [0, 1] interval.
 # clustering threshold for mergeSimilarWords
-merge_t <- 2
+merge_t <- 0.8
 # clustering threshold for intersectBasedClustering
-intersect_t <- 1
+intersect_t <- 0.7
 # clustering threshold for quickHierarchicalClustering
-quick_t <- 0.8
+quick_t <- 0.5
 
 ## Filter params
 # number of main keywords

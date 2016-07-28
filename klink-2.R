@@ -4,6 +4,7 @@ source("graph.R")
 library(stringi)
 library(hash)
 library(fastcluster)
+library(Rcpp)
 
 # Var naming here:
 # r - relation, string
@@ -16,6 +17,9 @@ semrel <- list()
 # iteration regulator
 continue <- TRUE
 
+# for S measure scaling
+largestS <- rep(0, rn)
+
 # I_r(x,y) conditional probability that
 # an element associated with x will be associated with y
 I.prob <- function(r, x, y, diachronic=FALSE) {
@@ -24,6 +28,7 @@ I.prob <- function(r, x, y, diachronic=FALSE) {
     if(!quantified[relation.index(r)] && diachronic) {
         ce <- common.entities(x, y, r)
         v = v * ((ent.year(y, ce) - min(ent.year(x, ce)) + 1)^(-gamma))
+        # v = v * ((ent_year_C(get.reldf(y), ce) - min(ent_year_C(get.reldf(x), ce)) + 1)^(-gamma))
     }
     # TODO quantified relation
     sum(v)
@@ -127,7 +132,9 @@ infer <- function(x, y) {
         else if (h <= -tR[i]) hierarchy = c(hierarchy, -1)
         else hierarchy = c(hierarchy, 0)
         tmetrics = c(tmetrics, T.metric(r, x, y))
-        smetrics = c(smetrics, S.metric(r, x, y))
+        s <- S.metric(r, x, y)
+        if(s > largestS[i]) largestS[i] <<- s
+        smetrics = c(smetrics, s)
     }
     # is there enough to infer hierarchical relation?
     if (length(which(hierarchy == 1)) >= th)
@@ -180,13 +187,15 @@ distance.matrix <- function(keywords) {
     for(i1 in 1:n) {
         for(i2 in i1:n) {
             if(i1 != i2) {
-                distances[i1,i2] = sum(sapply(relations, function(r) {
+                s <- sum(vapply(1:rn, function(r) {
                     if(is.list(keywords))
-                        S.metric(r, keywords[[i1]], keywords[[i2]])
+                        S.metric(r, keywords[[i1]], keywords[[i2]]) / largestS[r]
                     else
-                        S.metric(r, keywords[i1], keywords[i2])
-                    }))
-                distances[i2,i1] = distances[i1,i2]
+                        S.metric(r, keywords[i1], keywords[i2]) / largestS[r]
+                    }, 0))
+                s = 1 - s / rn
+                distances[i1,i2] = s
+                distances[i2,i1] = s
             }
         }
     }
@@ -236,8 +245,8 @@ harm.mean <- function(x) 1 / mean(1/x)
 # that will be used to name pseudo-keywords
 high.in.cluster <- function(k, other) {
     hmeans <- mapply(function(x,y) harm.mean(c(x,y)),
-        sapply(other, cooccur, k),
-        sapply(other, npapers))
+        vapply(other, cooccur, 0, k),
+        vapply(other, npapers, 0))
     other[which.max(hmeans)]
 }
 
@@ -263,7 +272,7 @@ quick.clustering <- function(keywords) {
                 if(i != j) {
                     p1 <- values(indh, keys=clusters[[i]])
                     p2 <- values(indh, keys=clusters[[j]])
-                    w <- rep(sapply(clusters[[i]], npapers), length(clusters[[j]]))
+                    w <- rep(vapply(clusters[[i]], npapers, 0), length(clusters[[j]]))
                     d[i,j] = sum((w * distances[fast.expand(p1,p2)]) / sum(w))
                 }
             }
@@ -357,17 +366,25 @@ academic <- function() {
     # 3: only one source at the moment, so no need
 }
 
-# empties global output variables
-prepare.globals <- function() {
+# empties global output variables and loads input
+prepare.globals <- function(inputfile) {
+    if(exists('inputm', where=globalenv()))
+        rm('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', envir=globalenv())
+    load(inputfile)
+    reldb_df <<- reldb_df
+    reldb_l <<- reldb_l
+    keywordsdb <<- keywordsdb
+    inputm <<- inputm
+
     triples <<- data.frame(k1=character(0), k2=character(0), relation=numeric(0), stringsAsFactors=FALSE)
     semrel <<- list()
     prepare.semrel()
     continue <<- TRUE
 }
 
-klink2 <- function() {
-    # ensure correctness of output variables
-    prepare.globals()
+klink2 <- function(inputfile) {
+    # ensure correctness of global variables
+    prepare.globals(inputfile)
 
     split_merge <- TRUE
     iter <- 1

@@ -71,11 +71,14 @@ new.index <- function() {
     maxindex
 }
 
+cached.keys <- function(ik, r) 2*r-1 + 2*rn*(ik-1)
+cached.values <- function(ik, r) 2*r + 2*rn*(ik-1)
+
 # representation of keyword as a single object, without relation dataframe
 keyword.object <- function(k) {
     ik <- keyword.index(k)
-    list(irel=inputm[, 2*1:rn-1 + 2*rn*(ik-1)],
-        rel=inputm[, 2*1:rn + 2*rn*(ik-1)],
+    list(irel=inputm[, cached.keys(ik, 1)],
+        rel=inputm[, cached.values(ik, 1)],
         super=super(ik),
         sib=sib(ik),
         df=NULL,
@@ -83,7 +86,7 @@ keyword.object <- function(k) {
 }
 
 # calculation of m largest co-occurrences for keyword i and relation rname;
-# compares i against all existin keywords.
+# compares i against keywords in words.
 # Returns matrix with column of indexes and column of values.
 # rname - relation name
 # i - keyword index
@@ -97,10 +100,10 @@ calc.cooccurrence <- function(rname, i, irel_l, irel_df=NULL, words=all.keywords
         j <- keyword.index(jk)
         if(i != j) {
             jrel_l <- reldb_l[[j]]
-            cooccur <- intersect(irel_l[[rname]], jrel_l[[rname]])
-            value <- length(which(ent.year(i, cooccur, irel_df) %in% ent.year(j, cooccur)))
+            cooccur <- intersect_C(irel_l[[rname]], jrel_l[[rname]])
+            value <- cooccurrence_C(irel_df, get.reldf(j), cooccur)
             # is there j word in the stored list?
-            im <- match(j, res[,1])
+            im <- match_C(j, res[,1])
             if(!is.na(im)) {
                 res[im,2] = res[im,2] + value
             } else {
@@ -120,6 +123,33 @@ calc.cooccurrence <- function(rname, i, irel_l, irel_df=NULL, words=all.keywords
     res
 }
 
+# retrieval of m largest co-occurrences for given keywords and relation rname
+# Returns matrix with column of indexes and column of values.
+# rname - relation name
+# words - keywords
+calc.cooccurrence.cached <- function(rname, words) {
+    m <- nrow(inputm)
+    r <- relation.index(rname)
+    iks <- vapply(words, keyword.index, 0)
+    iv <- as.vector(inputm[, cached.keys(iks, r)])
+    v <- as.vector(inputm[, cached.values(iks, r)])
+
+    ind <- order(iv)
+    ordiv <- iv[ind]
+    ordv <- v[ind]
+    outiv <- unique(ordiv)
+    outv <- unlist(lapply(split(ordv, ordiv), sum))
+
+    # sorting in decreasing order of relation values
+    ind = order(outv, decreasing=TRUE)
+    # forming final result
+    res <- matrix(0, nrow=m, ncol=2)
+    res[, 1] = outiv[ind][1:m]
+    res[, 2] = outv[ind][1:m]
+    if(length(outiv) < m) res[(length(outiv)+1):m, ] = 0
+    res
+}
+
 # strength of connection between k1 and k2 in regards to relation rel
 # returns number of co-occurrences in case of unquantified relation and
 # vector of minimum values in case of quantified
@@ -129,7 +159,7 @@ rel.value <- function(k1, k2, r) {
     rel = relation.index(r)
     ik1 <- keyword.index(k1)
     ik2 <- keyword.index(k2)
-    i <- match(ik2, inputm[, 2*rel-1 + 2*rn*(ik1-1)])
+    i <- match(ik2, inputm[, cached.keys(ik1, rel)])
     if(is.na(i)) {
          0
     } else {
@@ -143,7 +173,7 @@ rel.value <- function(k1, k2, r) {
             cooccur <- intersect(xv, yv)
             pmin(xq[which(xv==cooccur)], yq[which(yv==cooccur)])
         } else  {
-            inputm[i, 2*rel + 2*rn*(ik1-1)]
+            inputm[i, cached.values(ik1, rel)]
         }
     }
 }
@@ -162,8 +192,9 @@ set.semantic <- function(k1, semtype, k2) {
     if(length(k1) != length(k2)) stop("set.semantic got vectors of different size")
 
     i <- semantic.index(semtype)
-    ik1 <- sapply(k1, keyword.index)
-    ik2 <- sapply(k2, keyword.index)
+    ik1 <- k1; ik2 <- k2
+    if(!is.numeric(k1)) ik1 = vapply(k1, keyword.index, 0)
+    if(!is.numeric(k2)) ik2 = vapply(k2, keyword.index, 0)
     prevsize <- semrel$sizes[i]
     s <- prevsize + length(ik1)
     # check if there is place to put new relation
@@ -206,7 +237,7 @@ sib <- function(keyword) {
 common.entities <- function(k1, k2, rel) {
     rel1 <- reldb_df[[k1]]
     rel2 <- reldb_df[[k2]]
-    intersect(rel.entity(k1, rel, rel1), rel.entity(k2, rel, rel2))
+    intersect_C(rel.entity(k1, rel, rel1), rel.entity(k2, rel, rel2))
 }
 
 # total co-occurrence between k1 and k2
@@ -230,8 +261,8 @@ conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
     rel <- relation.index(rel)
     if(!is.list(keyword)) {
         ik <- keyword.index(keyword)
-        v <- inputm[, 2*rel + 2*rn*(ik-1)]
-        iv <- inputm[, 2*rel-1 + 2*rn*(ik-1)]
+        v <- inputm[, cached.values(ik, rel)]
+        iv <- inputm[, cached.keys(ik, rel)]
         if(is_super) superv <- super(ik)
         if(is_sib) sibv <- sib(ik)
     } else {
@@ -269,7 +300,7 @@ conn.vector <- function(rel, keyword, is_super=FALSE, is_sib=FALSE) {
 total.cooccur <- function(k) {
     ik <- keyword.index(k)
     rel <- 1:rn
-    v <- inputm[, 2*rel + 2*rn*(ik-1)]
+    v <- inputm[, cached.values(ik, rel)]
     apply(v, 2, sum)
 }
 
@@ -277,9 +308,9 @@ total.cooccur <- function(k) {
 main.cooccur <- function(k, n, index=FALSE) {
     ik <- keyword.index(k)
     if(index)
-        inputm[1:n, sort(c(2*1:rn-1 + 2*rn*(ik-1), 2*1:rn + 2*rn*(ik-1)))]
+        inputm[1:n, sort(c(cached.keys(ik, 1:rn), cached.values(ik, 1:rn)))]
      else
-        inputm[1:n, 2*1:rn + 2*rn*(ik-1)]
+        inputm[1:n, cached.values(ik, 1:rn)]
 }
 
 # number of entities associated with keyword
@@ -322,11 +353,11 @@ age <- function(keyword) {
 # (NOTE: among ones that are saved in input matrix)
 related.keywords <- function(keyword, threshold=relkeyT) {
     ik <- keyword.index(keyword)
-    v <- inputm[, 2*1:rn + 2*rn*(ik-1)]
-    iv <- inputm[, 2*1:rn-1 + 2*rn*(ik-1)]
+    v <- inputm[, cached.values(ik, 1:rn)]
+    iv <- inputm[, cached.keys(ik, 1:rn)]
     rk <- unique(iv[which(v > threshold)])
     # some words might have been already deleted
-    validrk <- sapply(rk, keyword.exists)
+    validrk <- vapply(rk, keyword.exists, TRUE)
     if(length(rk) == 0) c()
     else rk[validrk]
 }
@@ -341,15 +372,15 @@ merge.keywords <- function(cluster) {
     }
     m <- nrow(inputm)
     for(r in 1:rn) {
-        v <- as.vector(inputm[, 2*r + 2*rn*(cluster-1)])
-        iv <- as.vector(inputm[, 2*r-1 + 2*rn*(cluster-1)])
+        v <- as.vector(inputm[, cached.values(cluster, r)])
+        iv <- as.vector(inputm[, cached.keys(cluster, r)])
         ind <- order(v)
         v = v[ind][1:m]
         iv = iv[ind][1:m]
         if(ncol(inputm) < 2*r-1 + 2*rn*(index-1))
             inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn))
-        inputm[, 2*r-1 + 2*rn*(index-1)] <<- iv
-        inputm[, 2*r + 2*rn*(index-1)] <<- v
+        inputm[, cached.keys(index, r)] <<- iv
+        inputm[, cached.values(index, r)] <<- v
         rel_l[[relations[r]]] = rel.entity(newk, relations[r], rel)
     }
     reldb_df[[index]] <<- rel
@@ -368,7 +399,7 @@ intersect.reldf <- function(keyword, cluster) {
     entities <- c()
     for(k in cluster) {
         rel <- get.reldf(k)
-        entities = unique(c(entities, intersect(relk$entity, rel$entity)))
+        entities = unique(c(entities, intersect_C(relk$entity, rel$entity)))
     }
     relk[relk$entity %in% entities,]
 }
@@ -391,7 +422,7 @@ create.pseudo <- function(keyword, cluster) {
         # index does not matter here since it is a pseudo keyword and data frame is provided
         rel_l[[rname]] = rel.entity(1, rname, rel_df)
         # NOTE: not full cooccurrence calculation
-        co_m <- calc.cooccurrence(rname, 1, rel_l, irel_df=rel_df, words=words)
+        co_m <- calc.cooccurrence.cached(rname, words)
         irel[,r] = co_m[,1]
         rel[,r] = co_m[,2]
     }
@@ -411,10 +442,10 @@ add.pseudo <- function(ko, name, cluster) {
     index <- new.index()
     m <- nrow(inputm)
     for(r in 1:rn) {
-        if(ncol(inputm) < 2*r-1 + 2*rn*(index-1))
+        if(ncol(inputm) < cached.keys(index, r))
             inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn))
-        inputm[, 2*r-1 + 2*rn*(index-1)] <<- ko$irel[,r]
-        inputm[, 2*r + 2*rn*(index-1)] <<- ko$rel[,r]
+        inputm[, cached.keys(index, r)] <<- ko$irel[,r]
+        inputm[, cached.values(index, r)] <<- ko$rel[,r]
     }
     reldb_df[[index]] <<- ko$df
     reldb_l[[index]] <<- ko$rellist
@@ -444,8 +475,8 @@ delete.keyword <- function(keyword) {
             if(i < 4) {
                 # preserve three semantic relations
                 triples <<- rbind(triples, data.frame(list(
-                    k1=sapply(semmatrix[todel, 1], keyword.name),
-                    k2=sapply(semmatrix[todel, 2], keyword.name),
+                    k1=unlist(vapply(semmatrix[todel, 1], keyword.name, "")),
+                    k2=unlist(vapply(semmatrix[todel, 2], keyword.name, "")),
                     relation=rep(i, length(todel))), stringsAsFactors=FALSE))
             }
             if(length(todel) > 0) {
