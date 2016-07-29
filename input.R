@@ -32,7 +32,7 @@ read_dataset <- function(limit=-1) {
         if(!(empty(d$DE[i]) && empty(d$ID[i]))) w=c(i,w)
     d = d[w,]
 
-    d = d[1:limit,]
+    if(limit > 0) d = d[1:limit,]
 
     # fields used: 2 keywords fields, document title, authors, publication name, research areas, year
     # NOTE: these fields are already checked for empty in case of solar dataset,
