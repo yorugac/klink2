@@ -1,5 +1,6 @@
 # Prepare dataset as input to Klink-2.
 
+source('relations.R')
 library(Rcpp)
 sourceCpp('utils.cpp')
 
@@ -83,8 +84,6 @@ read_dataset <- function(limit=-1) {
 # populates inputm
 # NOTE: costly function O(n^2); currently on full data set can take several days
 cache_cooccurrence <- function() {
-    source('relations.R')
-
     # number of keywords
     n = length(ls(keywordsdb))
     inputm <<- matrix(0, nrow=m, ncol=n*2*rn)
@@ -114,3 +113,16 @@ run_all <- function(limit=-1) {
     save('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', file=paste('input', limit, '.Rdata', sep=''))
 }
 # To preserve time, functions can be run separately so long as input variables are saved and loaded.
+
+# prints main information about input variables
+# filename must contain input variables
+inspect_dataset <- function(filename) {
+    load(filename)
+    n <- length(reldb_df)
+    cat('Number of keywords: ', n, '\n')
+    for(i in 1:rn) {
+        cat('Value of co-occurrence,', relations[i], 'relation: [', 
+            min(inputm[, cached.values(1:n, i)]), ', ', 
+            max(inputm[, cached.values(1:n, i)]), ']\n')
+    }
+}
