@@ -23,6 +23,7 @@ largestS <- rep(0, rn)
 
 # filled during inference
 cachedS <- list()
+cachedCV <- list() # conn.vec structure
 
 # I_r(x,y) conditional probability that
 # an element associated with x will be associated with y
@@ -175,22 +176,41 @@ fast.expand <- function(v1, v2)
     cbind(rep.int(v1, length(v2)),
           rep.int(v2, rep.int(length(v1), length(v2))))
 
-# keywords: list of keyword objects or vector of keyword ids
-distance.matrix <- function(keywords) {
-    if(is.list(keywords)) names = NULL
-    else names = vapply(keywords, keyword.name, "")
+# keywords: vector of keyword ids;
+# based on cachedS value
+distance.matrix.cached <- function(keywords) {
+    keynames <- vapply(keywords, keyword.name, "")
     n <- length(keywords)
     distances <- matrix(0, nrow=n, ncol=n)
     for(i1 in 1:n) {
         for(i2 in i1:n) {
             if(i1 != i2) {
-                if(!is.null(names) && !is.null(cachedS[[names[i1]]]) && has.key(names[i2], cachedS[[names[i1]]])) {
-                    s <- sum(values(cachedS[[names[i1]]], keys=names[i2]) / largestS)
-                } else s <- sum(vapply(1:rn, function(r) {
-                    if(is.list(keywords))
+                if(!is.null(keynames) && !is.null(cachedS[[keynames[i1]]]) && has.key(keynames[i2], cachedS[[keynames[i1]]])) {
+                    s <- sum(values(cachedS[[keynames[i1]]], keys=keynames[i2]) / largestS)
+                } else {
+                    s <- sum(vapply(1:rn, function(r) {
+                            S.metric(r, keywords[i1], keywords[i2]) / largestS[r]
+                        }, 0))
+                }
+                s = 1 - s / rn
+                distances[i1,i2] = s
+                distances[i2,i1] = s
+            }
+        }
+    }
+    diag(distances) = Inf
+    distances
+}
+
+# keywords: list of keyword objects; does not rely on cachedS: for use with pseudo keywords
+distance.matrix <- function(keywords) {
+    n <- length(keywords)
+    distances <- matrix(0, nrow=n, ncol=n)
+    for(i1 in 1:n) {
+        for(i2 in i1:n) {
+            if(i1 != i2) {
+                s <- sum(vapply(1:rn, function(r) {
                         S.metric(r, keywords[[i1]], keywords[[i2]]) / largestS[r]
-                    else
-                        S.metric(r, keywords[i1], keywords[i2]) / largestS[r]
                     }, 0))
                 s = 1 - s / rn
                 distances[i1,i2] = s
@@ -219,7 +239,7 @@ similar <- function() {
     if(verbosity>=2) cat("mergeSimilarKeywords for", nrow(links), "links or", length(keywords), "keywords.\n")
     if(!length(keywords)) return()
 
-    cluster_v <- cutree(hclust(as.dist(distance.matrix(keywords)), method="single"), h=merge_t)
+    cluster_v <- cutree(hclust(as.dist(distance.matrix.cached(keywords)), method="single"), h=merge_t)
     nclusters <- max(cluster_v)
     for(k in 1:nclusters) {
         cl = keywords[which(cluster_v == k)]
@@ -261,7 +281,7 @@ gen.pseudos <- function(k, clusters) {
 
 quick.clustering <- function(keywords) {
     if(length(keywords) <= 1) return(list())
-    distances <- distance.matrix(keywords)
+    distances <- distance.matrix.cached(keywords)
     weights <- vapply(keywords, npapers, 0)
     clusters <- as.list(1:length(keywords))
     d <- distances
@@ -292,18 +312,15 @@ intersect.clustering <- function(ambk, keywords) {
         if(length(i) > 2) i = i[1,]
         if(length(clusters) > 1 && d[i[1],i[2]] < intersect_t) {
             clusters = merge.cluster(clusters, i[1], i[2])
-            pseudos = gen.pseudos(k, clusters)
+            # pseudos = gen.pseudos(k, clusters)
+            pseudos = update.pseudos(pseudos, i[1], i[2])
             d = distance.matrix(pseudos)
         } else break
     }
     if(length(clusters) > 1) {
         if(verbosity>=3) cat("splitting", ambk, "into ", length(clusters), "keywords\n")
-        # add pseudo-keywords
-        for(i in seq_along(clusters)) {
-            add.pseudo(pseudos[[i]],
-                paste(keyword.name(k), " (", keyword.name(high.in.cluster(k, clusters[[i]])), ")", sep=""),
-                clusters[[i]])
-        }
+        # add pseudos to global vars
+        add.pseudos(k, pseudos, clusters)
         # delete ambiguous keyword
         delete.keyword(k)
         # split was done
@@ -319,7 +336,7 @@ ambiguous <- function() {
     totalsplit <- 0
     for(k in all.keywords()) {
         if(verbosity>=3) cat("splitAmbiguousKeywords for", k, "\n")
-        rk <- related.keywords(k, threshold=relkeyT * 2)
+        rk <- related.keywords(k, threshold=relkeyAmbig)
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
             if(verbosity>=3) cat("intersect clustering: #clusters =", length(clusters), "\n")
@@ -327,7 +344,7 @@ ambiguous <- function() {
             if(s) totalsplit = totalsplit + 1
         }
     }
-    if(verbosity>=2) cat("Splitting was done", totalsplit, "times.\n")
+    if(verbosity>=2) cat("Splitting (intersect clustering) was done", totalsplit, "times.\n")
 }
 
 # filterNotAcademicKeywords
@@ -370,6 +387,13 @@ prepare.globals <- function(inputfile) {
     maxindex <<- NULL
 }
 
+# must be called once per iteration
+update.caches <- function() {
+    cachedS <<- list()
+    cachedCV <<- list()
+    cached.names <<- NULL
+}
+
 klink2 <- function(inputfile) {
     # ensure correctness of global variables
     prepare.globals(inputfile)
@@ -377,11 +401,11 @@ klink2 <- function(inputfile) {
     split_merge <- TRUE
     iter <- 1
     while(continue) {
+        update.caches()
         if(verbosity>=1) cat("Iteration", iter, "\nNumber of keywords =", nkeywords(), "\n")
         if(verbosity>=2) cat("Keyword inference.\n")
         # set to true only if there was splitting / merging done
         continue <<- FALSE
-        cachedS <<- list()
         for(k in all.keywords()) {
             if(verbosity>=3) cat("Infering keyword:", k, "\n")
             rk <- related.keywords(k)

@@ -8,6 +8,11 @@
 # can be checked with keyword.exists -- whether there is a name for it in reldb_df.
 
 maxindex <- NULL
+
+# keywords are added/deleted only by interserct.clustering and similar -- once per klink-2 iteration;
+# therefore they can be cached for all other times
+cached.names <- NULL
+
 zeromatrix <- NULL # used for semrel structure growth
 
 # a short-hand for relation index; TODO
@@ -65,7 +70,11 @@ nkeywords <- function() {
 }
 
 all.keywords <- function() {
-    names(reldb_df)[!is.na(names(reldb_df))]
+    if(is.null(cached.names)) {
+        n <- names(reldb_df)
+        cached.names <<- n[!is.na(n)]
+    }
+    cached.names
 }
 
 new.index <- function() {
@@ -214,24 +223,18 @@ super <- function(keyword) {
     ik <- keyword.index(keyword)
     semmatrix2 <- get.semantic(2)
     semmatrix3 <- get.semantic(3)
-    ibr <- which(ik == semmatrix2[,1])
-    ict <- which(ik == semmatrix3[,2])
-    res <- c()
-    if(length(ibr)) res = c(res, semmatrix2[ibr, 2])
-    if(length(ict)) res = c(res, semmatrix3[ict, 1])
-    res
+    i <- which(ik == c(semmatrix2[, 1], semmatrix3[,2]))
+    if(length(i)) c(semmatrix2[, 2], semmatrix3[, 1])[i]
+    else c()
 }
 
 # returns keywords that are siblings according to similarity relation
 sib <- function(keyword) {
     ik <- keyword.index(keyword)
     semmatrix <- get.semantic(1)
-    ire1 <- which(ik == semmatrix[,1])
-    ire2 <- which(ik == semmatrix[,2])
-    res <- c()
-    if(length(ire1)) res = c(res, semmatrix[ire1, 2])
-    if(length(ire2)) res = c(res, semmatrix[ire2, 1])
-    res
+    i <- which(ik == c(semmatrix[, 1], semmatrix[, 2]))
+    if(length(i)) c(semmatrix[, 2], semmatrix[, 1])[i]
+    else c()
 }
 
 # rel - string
@@ -260,6 +263,9 @@ cooccur <- function(k1, k2) {
 conn.vector <- function(rel, k) {
     n <- nkeywords()
     if(!is.list(k)) {
+        if(!is.character(k)) kname = keyword.name(k)
+        else kname = k
+        if(!is.null(cachedCV[[kname]])) return(cachedCV[[kname]])
         k = keyword.index(k)
         super = super(k); sib = sib(k)
     } else {
@@ -271,7 +277,9 @@ conn.vector <- function(rel, k) {
     if(is.list(k)) {
         conn_vector_C(k$irel[, rel], k$rel[, rel], n, super, sib)
     } else {
-        conn_vector_C(inputm[, cached.keys(k, rel)], inputm[, cached.values(k, rel)], n, super, sib)
+        cachedCV[[kname]] <<-
+            conn_vector_C(inputm[, cached.keys(k, rel)], inputm[, cached.values(k, rel)], n, super, sib)
+        cachedCV[[kname]]
     }
 }
 
@@ -297,7 +305,7 @@ nentities <- function(keyword) {
 }
 
 # number of papers associated with keyword
-npapers <- function(keyword) {
+npapers <- function(k) {
     length(reldb_l[[keyword.index(k)]][[publicationi]])
 }
 
@@ -349,7 +357,7 @@ merge.keywords <- function(cluster) {
     }
     m <- nrow(inputm)
     if(ncol(inputm) < cached.keys(index, 1))
-        inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn))
+        inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn*10))
     for(r in 1:rn) {
         v <- as.vector(inputm[, cached.values(cluster, r)])
         iv <- as.vector(inputm[, cached.keys(cluster, r)])
@@ -413,23 +421,73 @@ create.pseudo <- function(keyword, cluster) {
         rellist=rel_l)
 }
 
-# ko - keyword object
-# name - string for new keyword
-# cluster - all keywords used in intersect clustering
-add.pseudo <- function(ko, name, cluster) {
-    index <- new.index()
+# pseudos - list of keyword objects
+# i1 and i2 are to be "merged"
+update.pseudos <- function(pseudos, i1, i2) {
+    entities = unique(intersect_C(pseudos[[i1]]$df$entity, pseudos[[i2]]$df$entity))
+    pseudos[[i1]]$df = pseudos[[i1]]$df[pseudos[[i1]]$df$entity %in% entities, ]
+
     m <- nrow(inputm)
-    if(ncol(inputm) < cached.keys(index, 1))
-        inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=2*rn))
+
     for(r in 1:rn) {
-        inputm[, cached.keys(index, r)] <<- ko$irel[,r]
-        inputm[, cached.values(index, r)] <<- ko$rel[,r]
+        iv <- c(pseudos[[i1]]$irel[, r], pseudos[[i2]]$irel[,r])
+        v <- c(pseudos[[i1]]$rel[, r], pseudos[[i2]]$rel[, r])
+        ind <- order(iv)
+        outiv <- unique(iv[ind])
+        outv <- unlist(lapply(split(v[ind], iv[ind]), sum), use.names=FALSE)
+        ind = order(outv, decreasing=TRUE)
+	pseudos[[i1]]$irel[, r] = 0
+	pseudos[[i1]]$rel[, r] = 0
+        pseudos[[i1]]$irel[, r] = outiv[ind] #[1:m]
+        pseudos[[i1]]$rel[, r] = outv[ind] #[1:m]
+
+        rname <- relations[r]
+        pseudos[[i1]]$rellist[[rname]] = rel.entity(1, rname, pseudos[[i1]]$df)
     }
-    reldb_df[[index]] <<- ko$df
-    reldb_l[[index]] <<- ko$rellist
-    names(reldb_df)[index] <<- name
-    names(reldb_l)[index] <<- name
-    keywordsdb[[name]] <<- index
+
+    pseudos[[i1]]$super = unique(c(pseudos[[i1]]$super, pseudos[[i2]]$super))
+    pseudos[[i1]]$sib = unique(c(pseudos[[i1]]$sib, pseudos[[i2]]$sib))
+
+    pseudos[-i2]
+}
+
+# add pseudo keywords in a batch
+# k - ambiguous keyword (index)
+# pseudos - list of keyword objects
+# clusters - list of clusters
+# size of pseudos and clusters must be equal
+add.pseudos <- function(k, pseudos, clusters) { # ko, name, cluster) {
+    n <- length(clusters)
+    pseudonames <- character(n)
+    index <- numeric(n)
+    m <- nrow(inputm)
+    keysm <- matrix(0, nrow=m, ncol=rn * n)
+    valuesm <- matrix(0, nrow=m, ncol=rn * n)
+    dfs <- list()
+    rellists <- list()
+    for(i in seq_along(clusters)) {
+        pseudonames[i] = paste(keyword.name(k), " (", keyword.name(high.in.cluster(k, clusters[[i]])), ")", sep="")
+        index[i] = new.index()
+        where <- seq((i-1)*4+1, (i-1)*4+4)
+        keysm[, where] = pseudos[[i]]$irel
+        valuesm[, where] = pseudos[[i]]$rel
+        dfs[[i]] = pseudos[[i]]$df
+        rellists[[i]] = pseudos[[i]]$rellist
+        keywordsdb[[pseudonames[i]]] <<- index[i]
+    }
+
+    if(ncol(inputm) < cached.keys(tail(index, 1), 1))
+        inputm <<- cbind(inputm, matrix(0, nrow=m, ncol=(2 * rn) * n * 2)) # *2 - for future use
+
+    ikeys <- as.vector(vapply(index, cached.keys, numeric(4), 1:rn))
+    ivalues <- as.vector(vapply(index, cached.values, numeric(4), 1:rn))
+    inputm[, ikeys] <<- keysm
+    inputm[, ivalues] <<- valuesm
+    reldb_df[index] <<- dfs
+    reldb_l[index] <<- rellists
+    names(reldb_df)[index] <<- pseudonames
+    names(reldb_l)[index] <<- pseudonames
+
     index
 }
 

@@ -24,20 +24,22 @@ verbosity <- 2
 # Related keywords
 # what is the minimum connection strength for keywords to be considered related
 # during klink2 run?
-relkeyT <- 1
+relkeyT <- 2
+# what is the minimum connection strength for keywords to be checked for ambiguousity?
+relkeyAmbig <- 3
 
 ## Metric params
 # weights for linear combination of n measure (string similarity) which is based on
 # longest common words, identical words, common characters, presence of acronyms
 nweights <- c(1, 1, 1, 1)
 # threshold for hierarchical metrics, different for each input relation
-tR <- c(3, 3, 3, 3)
+tR <- c(4, 4, 4, 4)
 # threshold for hierarchical indicators, i.e. how many should point in the same direction
-th <- 2
+th <- 3
 # threshold for relatedEquivalent metric
-tS <- 0.97
+tS <- 0.95
 # threshold for relatedEquivalent indicators, i.e. how many should be positive
-tre <- 2
+tre <- 3
 # coefficient for T metric
 gamma <- 2 # must be > 0
 
