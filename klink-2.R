@@ -365,6 +365,9 @@ prepare.globals <- function(inputfile) {
     semrel <<- list()
     prepare.semrel()
     continue <<- TRUE
+
+    # defined in relations.R
+    maxindex <<- NULL
 }
 
 klink2 <- function(inputfile) {
@@ -402,6 +405,7 @@ klink2 <- function(inputfile) {
     academic()
 
     rm('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', envir=globalenv())
+    output.stats()
 }
 
 output.keywords <- function() {
@@ -409,5 +413,6 @@ output.keywords <- function() {
 }
 
 output.stats <- function() {
-    cat("Number of keywords: ", length(output.keywords()), "\nNumber of relations: ", dim(triples)[1], "\n")
+    cat("Output\n\tnumber of keywords: ", length(output.keywords()),
+        "\n\tnumber of relations: ", dim(triples)[1], "\n")
 }

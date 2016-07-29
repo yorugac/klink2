@@ -35,7 +35,7 @@ tR <- c(3, 3, 3, 3)
 # threshold for hierarchical indicators, i.e. how many should point in the same direction
 th <- 2
 # threshold for relatedEquivalent metric
-tS <- 0.95
+tS <- 0.97
 # threshold for relatedEquivalent indicators, i.e. how many should be positive
 tre <- 2
 # coefficient for T metric
@@ -47,7 +47,7 @@ merge_t <- 0.8
 # clustering threshold for intersectBasedClustering
 intersect_t <- 0.7
 # clustering threshold for quickHierarchicalClustering
-quick_t <- 0.5
+quick_t <- 0.6
 
 ## Filter params
 # number of main keywords
