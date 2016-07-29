@@ -5,6 +5,7 @@ library(stringi)
 library(hash)
 library(fastcluster)
 library(Rcpp)
+sourceCpp('utils.cpp')
 
 # Var naming here:
 # r - relation, string
@@ -20,15 +21,18 @@ continue <- TRUE
 # for S measure scaling
 largestS <- rep(0, rn)
 
+# filled during inference
+cachedS <- list()
+
 # I_r(x,y) conditional probability that
 # an element associated with x will be associated with y
 I.prob <- function(r, x, y, diachronic=FALSE) {
+    x = keyword.index(x); y = keyword.index(y)
     v <- rel.value(x, y, r)
     if(v==0) return(0)
-    if(!quantified[relation.index(r)] && diachronic) {
+    if(!quantified[r] && diachronic) {
         ce <- common.entities(x, y, r)
-        v = v * ((ent.year(y, ce) - min(ent.year(x, ce)) + 1)^(-gamma))
-        # v = v * ((ent_year_C(get.reldf(y), ce) - min(ent_year_C(get.reldf(x), ce)) + 1)^(-gamma))
+        v = v * ((ent_year_C(get.reldf(y), ce) - min(ent_year_C(get.reldf(x), ce)) + 1)^(-gamma))
     }
     # TODO quantified relation
     sum(v)
@@ -48,15 +52,6 @@ identical.words <- function(x, y) {
     length(intersect(wordsx, wordsy)) / max(length(wordsx), length(wordsy))
 }
 
-# number of common characters
-common.chars <- function(x, y) {
-    charsx <- trimws(strsplit(x, "")[[1]])
-    charsx = unique(charsx[which(nchar(charsx) > 0)])
-    charsy <- trimws(strsplit(y, "")[[1]])
-    charsy = unique(charsy[which(nchar(charsy) > 0)])
-    length(intersect(charsx, charsy))
-}
-
 # search for acronyms, separated by dots
 # NOTE: does not check if acronyms are matching
 # All keywords are lowered during input handling,
@@ -69,38 +64,32 @@ have.acronym <- function(x, y) {
 
 # n(x,y) measure
 string.similarity <- function(x, y) {
-    sum(nweights * c(length(lcs(x,y)), identical.words(x,y), common.chars(x,y), have.acronym(x,y)))
+    sum(nweights * c(length(lcs(x,y)), identical.words(x,y), common_chars_C(x,y), have.acronym(x,y)))
 }
 
 # c_r(x,y) measure
 # vx, vy as arguments for optimization purpose, matrices returned by conn.vector
-semantic.similarity <- function(r, x, y, is_super=FALSE, is_sib=FALSE, vx=NULL, vy=NULL) {
-    if(is.null(vx)) vx <- conn.vector(r, x, is_super, is_sib)
-    if(is.null(vy)) vy <- conn.vector(r, y, is_super, is_sib)
-    interv <- intersect(vx[,1], vy[,1])
-    intervx <- vx[,2][match(interv, vx[,1])]
-    intervy <- vy[,2][match(interv, vy[,1])]
-    s <- as.double(intervx %*% intervy) / (sqrt(sum(vx[,2]^2)) * sqrt(sum(vy[,2]^2)))
+semantic.similarity <- function(vx, vy) {
+    if(length(vx) == 0 || length(vy) == 0) return(0)
+    s <- semantic_similarity_C(vx, vy) / (sqrt(sum(vx[,2]^2)) * sqrt(sum(vy[,2]^2)))
     if(is.nan(s)) s = 0
     s
 }
 
-H.metric <- function(r, x, y, diachronic=FALSE) {
+# vx, vy - matrices
+H.metric <- function(r, x, y, vx, vy, diachronic=FALSE, stringsim=NULL) {
     m <- (I.prob(r, x, y, diachronic) / I.prob(r, x, x, diachronic) - I.prob(r, y, x, diachronic) / I.prob(r, y, y, diachronic)) *
-        semantic.similarity(r, x, y) * string.similarity(x, y)
+        semantic.similarity(vx, vy) * stringsim
     if(is.nan(m)) m = 0
     m
 }
 
-T.metric <- function(r, x, y) {
-    H.metric(r, x, y, diachronic=TRUE)
-}
-
-S.metric <- function(r, x, y) {
-    vx <- conn.vector(r, x, is_super=TRUE, is_sib=TRUE)
-    vy <- conn.vector(r, y, is_super=TRUE, is_sib=TRUE)
-    semantic.similarity(r, x, y, vx=vx[[1]], vy=vy[[1]]) /
-        (max(semantic.similarity(r, x, y, vx=vx[[2]], vy=vy[[2]]), semantic.similarity(r, x, y, vx=vx[[3]], vy=vy[[3]])) + 1)
+# vx, vy - lists with 3 matrices
+S.metric <- function(r, x, y, vx=NULL, vy=NULL) {
+    if(is.null(vx)) vx = conn.vector(r, x)
+    if(is.null(vy)) vy = conn.vector(r, y)
+    semantic.similarity(vx[[1]], vy[[1]]) /
+        (max(semantic.similarity(vx[[2]], vy[[2]]), semantic.similarity(vx[[3]], vy[[3]])) + 1)
 }
 
 # infer relations
@@ -124,18 +113,24 @@ infer <- function(x, y) {
     hmetrics <- c()
     tmetrics <- c()
     smetrics <- c()
-    for(i in seq_along(relations)) {
-        r <- relations[i]
-        h <- H.metric(r, x, y)
+    stringsim <- string.similarity(x, y)
+    for(r in 1:rn) {
+        vx <- conn.vector(r, x)
+        vy <- conn.vector(r, y)
+        h <- H.metric(r, x, y, vx[[1]], vy[[1]], stringsim=stringsim)
         hmetrics = c(hmetrics, h)
-        if (h >= tR[i]) hierarchy = c(hierarchy, 1)
-        else if (h <= -tR[i]) hierarchy = c(hierarchy, -1)
+        if (h >= tR[r]) hierarchy = c(hierarchy, 1)
+        else if (h <= -tR[r]) hierarchy = c(hierarchy, -1)
         else hierarchy = c(hierarchy, 0)
-        tmetrics = c(tmetrics, T.metric(r, x, y))
-        s <- S.metric(r, x, y)
-        if(s > largestS[i]) largestS[i] <<- s
+        tmetrics = c(tmetrics, H.metric(r, x, y, vx[[1]], vy[[1]], diachronic=TRUE, stringsim=stringsim))
+        s <- S.metric(r, x, y, vx, vy)
+        if(s > largestS[r]) largestS[r] <<- s
         smetrics = c(smetrics, s)
     }
+
+    if(is.null(cachedS[[x]])) cachedS[[x]] <<- hash()
+    cachedS[[x]][y] <<- smetrics
+
     # is there enough to infer hierarchical relation?
     if (length(which(hierarchy == 1)) >= th)
         hierarchy = 1
@@ -182,12 +177,16 @@ fast.expand <- function(v1, v2)
 
 # keywords: list of keyword objects or vector of keyword ids
 distance.matrix <- function(keywords) {
+    if(is.list(keywords)) names = NULL
+    else names = vapply(keywords, keyword.name, "")
     n <- length(keywords)
     distances <- matrix(0, nrow=n, ncol=n)
     for(i1 in 1:n) {
         for(i2 in i1:n) {
             if(i1 != i2) {
-                s <- sum(vapply(1:rn, function(r) {
+                if(!is.null(names) && !is.null(cachedS[[names[i1]]]) && has.key(names[i2], cachedS[[names[i1]]])) {
+                    s <- sum(values(cachedS[[names[i1]]], keys=names[i2]) / largestS)
+                } else s <- sum(vapply(1:rn, function(r) {
                     if(is.list(keywords))
                         S.metric(r, keywords[[i1]], keywords[[i2]]) / largestS[r]
                     else
@@ -263,31 +262,19 @@ gen.pseudos <- function(k, clusters) {
 quick.clustering <- function(keywords) {
     if(length(keywords) <= 1) return(list())
     distances <- distance.matrix(keywords)
-    indh <- hash(keywords, 1:ncol(distances))
-    clusters <- as.list(keywords)
-    update.dist <- function(keywords) {
-        d <- matrix(0, nrow=length(clusters), ncol=length(clusters))
-        for(i in seq_along(clusters)) {
-            for(j in seq_along(clusters)) {
-                if(i != j) {
-                    p1 <- values(indh, keys=clusters[[i]])
-                    p2 <- values(indh, keys=clusters[[j]])
-                    w <- rep(vapply(clusters[[i]], npapers, 0), length(clusters[[j]]))
-                    d[i,j] = sum((w * distances[fast.expand(p1,p2)]) / sum(w))
-                }
-            }
-        }
-        diag(d) = Inf
-        d
-    }
+    weights <- vapply(keywords, npapers, 0)
+    clusters <- as.list(1:length(keywords))
     d <- distances
     while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
-        if(length(clusters) > 1 && d[i[1],i[2]] < quick_t) {
+        if(length(clusters) > 1 && d[i[1],i[2]] <= quick_t) {
             clusters = merge.cluster(clusters, i[1], i[2])
-            d = update.dist(keywords)
+            d = update_dist_C(distances, clusters, weights)
         } else break
+    }
+    for(i in seq_along(clusters)) {
+        clusters[[i]] = keywords[clusters[[i]]]
     }
     clusters
 }
@@ -368,8 +355,6 @@ academic <- function() {
 
 # empties global output variables and loads input
 prepare.globals <- function(inputfile) {
-    if(exists('inputm', where=globalenv()))
-        rm('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', envir=globalenv())
     load(inputfile)
     reldb_df <<- reldb_df
     reldb_l <<- reldb_l
@@ -393,6 +378,7 @@ klink2 <- function(inputfile) {
         if(verbosity>=2) cat("Keyword inference.\n")
         # set to true only if there was splitting / merging done
         continue <<- FALSE
+        cachedS <<- list()
         for(k in all.keywords()) {
             if(verbosity>=3) cat("Infering keyword:", k, "\n")
             rk <- related.keywords(k)
@@ -414,4 +400,14 @@ klink2 <- function(inputfile) {
         iter = iter + 1
     }
     academic()
+
+    rm('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', envir=globalenv())
+}
+
+output.keywords <- function() {
+    unique(c(triples$k1, triples$k2))
+}
+
+output.stats <- function() {
+    cat("Number of keywords: ", length(output.keywords()), "\nNumber of relations: ", dim(triples)[1], "\n")
 }

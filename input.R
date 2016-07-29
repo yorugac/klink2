@@ -29,13 +29,14 @@ reldb_l <- list()
 k <- 1
 
 # for testing purposes
-d = d[1:5000,]
+d = d[1:100,]
 # d = d[ceiling(runif(5000, min=0, max=dim(d)[1]-1)),]
 
 # length of saved relation values
 m <- 100
-
+a <- 1
 process_item <- function(item) {
+    cat("process article ", a, "\n"); a <<- a+1
     keywords <- unique(unlist(sapply(strsplit(tolower(item[c("DE", "ID")]), ";"), trimws)))
     newkeywords = setdiff(keywords, ls(keywordsdb))
     oldkeywords = setdiff(keywords, newkeywords)
@@ -43,7 +44,7 @@ process_item <- function(item) {
     authors <- unlist(sapply(strsplit(item["AU"], ";"), trimws))
     areas <- unique(unlist(sapply(strsplit(tolower(item["SC"]), ";"), trimws)))
     venues <- tolower(item["SO"])
-    relation <- factor(c("publication", rep("author", length(authors)), "venue", rep("area", length(areas))))
+    relation <- c(1, rep(2, length(authors)), 3, rep(4, length(areas)))
     entity <- c(item["TI"], authors, venues, areas)
     quantity <- rep(NA_integer_, length(entity))
     year <- as.numeric(rep(item["PY"], length(entity)))
@@ -78,8 +79,8 @@ n = length(ls(keywordsdb))
 inputm <- matrix(0, nrow=m, ncol=n*2*rn)
 source('relations.R')
 # O(n^2):
-for(i in 1:length(reldb_l)) {
-    cat("process ", i, "\n")
+for(i in 1:n) {
+    cat("process keyword ", i, "\n")
     irel = reldb_l[[i]]
     for(r in 1:rn) {
         rname <- relations[r]
@@ -88,10 +89,11 @@ for(i in 1:length(reldb_l)) {
         inputm[, 2*r + 2*rn*(i-1)] = co_m[,2]
     }
 }
+
 # sorting in decreasing order of relation values
 for(i in seq(1,ncol(inputm)-1,by=2)) {
     ind <- order(inputm[, i+1], decreasing=TRUE)
     inputm[, i] = inputm[, i][ind]
     inputm[, i+1] = inputm[, i+1][ind]
 }
-save('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', file="input5000.Rdata")
+save('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', file="input100.Rdata")

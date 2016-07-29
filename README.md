@@ -7,7 +7,7 @@
 3. Run algorithm:
 
 ```
-source('klink-2.R')
+source('klink-2.R') # compiles C code as well
 klink2('input.Rdata')
 ```
 
