@@ -71,9 +71,7 @@ string.similarity <- function(x, y) {
 # vx, vy as arguments for optimization purpose, matrices returned by conn.vector
 semantic.similarity <- function(vx, vy) {
     if(length(vx) == 0 || length(vy) == 0) return(0)
-    s <- semantic_similarity_C(vx, vy) / (sqrt(sum(vx[,2]^2)) * sqrt(sum(vy[,2]^2)))
-    if(is.nan(s)) s = 0
-    s
+    semantic_similarity_C(vx, vy, TRUE)
 }
 
 # vx, vy - matrices
@@ -123,7 +121,7 @@ infer <- function(x, y) {
         else if (h <= -tR[r]) hierarchy = c(hierarchy, -1)
         else hierarchy = c(hierarchy, 0)
         tmetrics = c(tmetrics, H.metric(r, x, y, vx[[1]], vy[[1]], diachronic=TRUE, stringsim=stringsim))
-        s <- S.metric(r, x, y, vx, vy)
+        s <- S_metric_C(vx, vy)
         if(s > largestS[r]) largestS[r] <<- s
         smetrics = c(smetrics, s)
     }
@@ -214,7 +212,7 @@ distance.matrix <- function(keywords) {
         for(i2 in i1:n) {
             if(i1 != i2) {
                 s <- sum(vapply(1:rn, function(r) {
-                     S.metric(r, NULL, NULL, cv[[(i1-1)*rn + r]], cv[[(i2-1)*rn + r]])
+                     S_metric_C(cv[[(i1-1)*rn + r]], cv[[(i2-1)*rn + r]])
                      }, 0) / largestS)
                 s = 1 - s / rn
                 distances[i1,i2] = s
@@ -337,6 +335,7 @@ intersect.clustering <- function(ambk, keywords) {
 ambiguous <- function() {
     if(verbosity>=2) cat("Seeking ambiguous keywords.\n")
     totalsplit <- 0
+    totalintersect <- 0
     for(k in all.keywords()) {
         if(verbosity>=3) cat("splitAmbiguousKeywords for", k, "\n")
         rk <- related.keywords(k, threshold=relkeyAmbig)
@@ -345,9 +344,13 @@ ambiguous <- function() {
             if(verbosity>=3) cat("intersect clustering: #clusters =", length(clusters), "\n")
             s <- intersect.clustering(k, rk)
             if(s) totalsplit = totalsplit + 1
+            totalintersect = totalintersect +1
         }
     }
-    if(verbosity>=2) cat("Splitting (intersect clustering) was done", totalsplit, "times.\n")
+    if(verbosity>=2) {
+        cat("Intersect clustering was run", totalintersect, "times.\n")
+        cat("Splitting was done", totalsplit, "times.\n")
+    }
 }
 
 # filterNotAcademicKeywords

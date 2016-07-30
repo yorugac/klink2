@@ -168,18 +168,54 @@ NumericMatrix update_dist_C(NumericMatrix d, List clusters, NumericVector weight
     return d2;
 }
 
+double ss_accumf(const int& a, const int& b) {
+    return a + std::pow(b, 2);
+}
 // [[Rcpp::export]]
-double semantic_similarity_C(NumericMatrix x, NumericMatrix y) {
+double semantic_similarity_C(NumericMatrix x, NumericMatrix y, bool run_complete=false) {
+    int xn = x.nrow(), j;
     NumericMatrix::Column kx = x.column(0);
     NumericMatrix::Column vx = x.column(1);
     NumericMatrix::Column ky = y.column(0);
     NumericMatrix::Column vy = y.column(1);
-    int xn = x.nrow(), j;
     double t = 0;
     // smth faster?
     for(int i = 0; i < xn; ++i) {
         j = std::distance(ky.begin(), std::find(ky.begin(), ky.end(), kx[i]));
         if(j != ky.size()) t += vx[i] * vy[j];
     }
+    if(run_complete) {
+        double d = std::sqrt(std::accumulate(vx.begin(), vx.end(), 0, ss_accumf)) *
+            std::sqrt(std::accumulate(vy.begin(), vy.end(), 0, ss_accumf));
+        if(d == 0) return 0;
+        return t / d;
+    }
     return t;
 }
+
+// [[Rcpp::export]]
+double S_metric_C(const List& vx, const List& vy) {
+    return semantic_similarity_C(vx[0], vy[0], true) /
+        (std::max(semantic_similarity_C(vx[1], vy[1], true),
+                    semantic_similarity_C(vx[2], vy[2], true)) + 1);
+}
+
+// // [[Rcpp::export]]
+// NumericMatrix distance_matrix_C(int n, const List& connvectors, const NumericVector& largestS, int rn) {
+//     double t, s;
+//     NumericMatrix d(n, n);
+//     for(int i = 0; i < n; ++i)
+//         for(int j = i; j < n; ++j) {
+//             if(i != j) {
+//                 t = 0;
+//                 for(int r = 1; i <= rn; ++r) {
+//                     s = S_metric_C(as<List>(connvectors[i*rn + r]), as<List>(connvectors[j*rn + r]));
+//                     t += s[0] / largestS[r-1];
+//                 }
+//                 t = 1 - t / rn;
+//                 d(i, j) = t;
+//                 d(j, i) = t;
+//             } else d(i, j) = R_PosInf;
+//         }
+//     return d;
+// }
