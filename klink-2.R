@@ -4,8 +4,7 @@ source("graph.R")
 library(stringi)
 library(hash)
 library(fastcluster)
-library(Rcpp)
-sourceCpp('utils.cpp')
+Rcpp::sourceCpp('utils.cpp')
 
 # Var naming here:
 # r - relation, string
@@ -33,7 +32,7 @@ I.prob <- function(r, x, y, diachronic=FALSE) {
     if(v==0) return(0)
     if(!quantified[r] && diachronic) {
         ce <- common.entities(x, y, r)
-        v = v * ((ent_year_C(get.reldf(y), ce) - min(ent_year_C(get.reldf(x), ce)) + 1)^(-gamma))
+        v = v * ((ent.year(ce) - debut(x) + 1)^(-gamma))
     }
     # TODO quantified relation
     sum(v)
@@ -141,7 +140,7 @@ infer <- function(x, y) {
         hierarchy = 0
     # determine type of hierarchical relation
     if (hierarchy == 1 || hierarchy == -1) {
-        if (age(x) > age(y) && nentities(x) > nentities(y) && prevalence(tmetrics, hmetrics)) {
+        if (debut(x) < debut(y) && nentities(x) > nentities(y) && prevalence(tmetrics, hmetrics)) {
             # broaderGeneric
             if(hierarchy == 1)
                 set.semantic(x, semantic[2], y)
@@ -188,9 +187,7 @@ distance.matrix.cached <- function(keywords) {
                 if(!is.null(keynames) && !is.null(cachedS[[keynames[i1]]]) && has.key(keynames[i2], cachedS[[keynames[i1]]])) {
                     s <- sum(values(cachedS[[keynames[i1]]], keys=keynames[i2]) / largestS)
                 } else {
-                    s <- sum(vapply(1:rn, function(r) {
-                            S.metric(r, keywords[i1], keywords[i2]) / largestS[r]
-                        }, 0))
+                    s <- sum(vapply(1:rn, S.metric, 0, keywords[i1], keywords[i2]) / largestS)
                 }
                 s = 1 - s / rn
                 distances[i1,i2] = s
@@ -202,16 +199,23 @@ distance.matrix.cached <- function(keywords) {
     distances
 }
 
-# keywords: list of keyword objects; does not rely on cachedS: for use with pseudo keywords
+# keywords: list of keyword objects;
+# does not rely on cachedS: for use with pseudo keywords
 distance.matrix <- function(keywords) {
     n <- length(keywords)
+    cv <- list()
+    for(i in 1:n) {
+        for(r in 1:rn) {
+            cv[[(i-1)*rn + r]] = conn.vector(r, keywords[[i]])
+        }
+    }
     distances <- matrix(0, nrow=n, ncol=n)
     for(i1 in 1:n) {
         for(i2 in i1:n) {
             if(i1 != i2) {
                 s <- sum(vapply(1:rn, function(r) {
-                        S.metric(r, keywords[[i1]], keywords[[i2]]) / largestS[r]
-                    }, 0))
+                     S.metric(r, NULL, NULL, cv[[(i1-1)*rn + r]], cv[[(i2-1)*rn + r]])
+                     }, 0) / largestS)
                 s = 1 - s / rn
                 distances[i1,i2] = s
                 distances[i2,i1] = s
@@ -310,17 +314,16 @@ intersect.clustering <- function(ambk, keywords) {
     while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
-        if(length(clusters) > 1 && d[i[1],i[2]] < intersect_t) {
+        if(length(clusters) > 1 && d[i[1],i[2]] <= intersect_t) {
+            pseudos = update.pseudos(pseudos, i[1], i[2], c(clusters[[i[1]]], clusters[[i[2]]]))
             clusters = merge.cluster(clusters, i[1], i[2])
-            # pseudos = gen.pseudos(k, clusters)
-            pseudos = update.pseudos(pseudos, i[1], i[2])
             d = distance.matrix(pseudos)
         } else break
     }
     if(length(clusters) > 1) {
         if(verbosity>=3) cat("splitting", ambk, "into ", length(clusters), "keywords\n")
         # add pseudos to global vars
-        add.pseudos(k, pseudos, clusters)
+        add.pseudos(k, clusters)
         # delete ambiguous keyword
         delete.keyword(k)
         # split was done

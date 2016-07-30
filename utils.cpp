@@ -3,24 +3,17 @@ using namespace Rcpp;
 
 #include <algorithm>
 
-// [[Rcpp::export]]
-int match_C(int j, NumericVector v) {
-    for(int i = 0; i < v.size(); ++i)
-        if(v[i] == j) return i + 1;
-    return NA_INTEGER;
-}
+// TODO what is going on with character cases in R vs std sorting?
 
 // [[Rcpp::export]]
-NumericVector ent_year_C(List df, CharacterVector entities) {
-    CharacterVector ent = as<CharacterVector>(df["entity"]);
-    NumericVector y = as<NumericVector>(df["year"]);
-    int n1 = ent.size(), n = entities.size();
-    std::vector<int> matched;
-    for(int j = 0; j < n; ++j) {
-        size_t i = std::distance(ent.begin(), std::find(ent.begin(), ent.end(), entities[j]));
-        if(i != n1) matched.push_back(y[i]);
-    }
-    return wrap(matched);
+// v1 and v2 are previously sorted
+std::vector<std::string> intersect_C(const std::vector<std::string> & v1, const std::vector<std::string> & v2) {
+    std::vector<std::string> v(v1.size() + v2.size());
+    std::vector<std::string>::iterator it = std::set_intersection(
+        v1.begin(), v1.end(),
+        v2.begin(), v2.end(), v.begin());
+    v.resize(std::distance(v.begin(), it));
+    return v;
 }
 
 // [[Rcpp::export]]
@@ -49,6 +42,45 @@ int cooccurrence_C(List df1, List df2, CharacterVector entities) {
     return std::distance(res.begin(), it);
 }
 
+bool keyvalue_cmp(const std::pair<int, int>& a, const std::pair<int, int>& b) {
+    return a.second > b.second;
+}
+
+// [[Rcpp::export]]
+// for use in data pre-processing only, since it considers only keywords with indexes 1..n
+// n - number of keywords
+// m - number of cached values to save
+// i - index of keyword which is analyzed
+// r - number of relation
+// maxsize - size of largest possible entities vector
+NumericMatrix calc_cooccurrence_C(const int n, const int m, const int i, int r, const List& reldb_l, int maxsize=1000) {
+    CharacterVector ientities = as<List>(reldb_l[i-1])[r-1], jentities;
+    std::vector<std::pair<int, int>> v(m);
+    std::vector<std::string> interv(maxsize + ientities.size());
+    auto zeros = std::make_pair(0, 0);
+    int value, j;
+    for(j = 0; j < n; ++j) {
+        if(i-1 != j) {
+            jentities = as<List>(reldb_l[j])[r-1];
+            auto it = std::set_intersection(
+                ientities.begin(), ientities.end(),
+                jentities.begin(), jentities.end(), interv.begin());
+            value = std::distance(interv.begin(), it);
+            if(value) {
+                auto p = std::make_pair(j+1, value);
+                auto it = std::lower_bound(v.begin(), v.end(), zeros, keyvalue_cmp);
+                if(it == v.end()) // no more free space
+                    *(std::lower_bound(v.begin(), v.end(), p, keyvalue_cmp)) = p;
+                else if(it != v.end()) *it = p;
+            }
+        }
+    }
+    std::sort(v.begin(), v.end(), keyvalue_cmp);
+    NumericMatrix res(m, 2);
+    for(j = 0; j < m; ++j) { res(j, 0) = v[j].first; res(j, 1) = v[j].second; }
+    return res;
+}
+
 // [[Rcpp::export]]
 // number of common characters
 int common_chars_C(CharacterVector w1, CharacterVector w2) {
@@ -64,21 +96,6 @@ int common_chars_C(CharacterVector w1, CharacterVector w2) {
         s1.begin(), s1.end(),
         s2.begin(), s2.end(), v.begin());
     return std::distance(v.begin(), it);
-}
-
-// [[Rcpp::export]]
-std::vector<std::string> intersect_C(CharacterVector v1, CharacterVector v2) {
-    std::vector<std::string> v(v1.size() + v2.size());
-    std::vector<std::string> s1 = as<std::vector<std::string> >(v1);
-    std::vector<std::string> s2 = as<std::vector<std::string> >(v2);
-    std::sort(s1.begin(), s1.end());
-    std::sort(s2.begin(), s2.end());
-
-    std::vector<std::string>::iterator it = std::set_intersection(
-        s1.begin(), s1.end(),
-        s2.begin(), s2.end(), v.begin());
-    v.resize(it - v.begin());
-    return v;
 }
 
 // [[Rcpp::export]]
@@ -150,10 +167,6 @@ NumericMatrix update_dist_C(NumericMatrix d, List clusters, NumericVector weight
         }
     return d2;
 }
-
-// bool keys_compare(const NumericMatrix::Row& a, const NumericMatrix::Row& b){
-//     return a[0] < b[0];
-// }
 
 // [[Rcpp::export]]
 double semantic_similarity_C(NumericMatrix x, NumericMatrix y) {
