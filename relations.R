@@ -334,7 +334,9 @@ related.keywords <- function(keyword, threshold=relkeyT) {
     ik <- keyword.index(keyword)
     v <- inputm[, cached.values(ik, 1:rn)]
     iv <- inputm[, cached.keys(ik, 1:rn)]
-    rk <- unique(iv[which(v > threshold)])
+    rk <- list()
+    for(i in 1:rn) rk[[i]] = iv[which(v[, i] > threshold[i]), i]
+    rk = unique(unlist(rk))
     # some words might have been already deleted
     validrk <- vapply(rk, keyword.exists, TRUE)
     if(length(rk) == 0) c()

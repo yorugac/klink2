@@ -176,8 +176,9 @@ fast.expand <- function(v1, v2)
 # keywords: vector of keyword ids;
 # based on cachedS value
 distance.matrix.cached <- function(keywords) {
-    keynames <- vapply(keywords, keyword.name, "")
     n <- length(keywords)
+    keynames <- character(n)
+    for(i in 1:n) keynames[i] = keyword.name(keywords[i])
     distances <- matrix(0, nrow=n, ncol=n)
     for(i1 in 1:n) {
         for(i2 in i1:n) {
@@ -211,10 +212,9 @@ distance.matrix <- function(keywords) {
     for(i1 in 1:n) {
         for(i2 in i1:n) {
             if(i1 != i2) {
-                s <- sum(vapply(1:rn, function(r) {
-                     S_metric_C(cv[[(i1-1)*rn + r]], cv[[(i2-1)*rn + r]])
-                     }, 0) / largestS)
-                s = 1 - s / rn
+                s = rep(0, rn)
+                for(r in 1:rn) s[r] = S_metric_C(cv[[(i1-1)*rn + r]], cv[[(i2-1)*rn + r]])
+                s = 1 - sum(s / largestS) / rn
                 distances[i1,i2] = s
                 distances[i2,i1] = s
             }
@@ -309,6 +309,7 @@ intersect.clustering <- function(ambk, keywords) {
     clusters <- as.list(keywords)
     pseudos <- gen.pseudos(k, clusters)
     d <- distance.matrix(pseudos)
+
     while(TRUE) {
         i <- which(d==min(d, na.rm=TRUE), arr.ind=T)
         if(length(i) > 2) i = i[1,]
@@ -337,8 +338,8 @@ ambiguous <- function() {
     totalsplit <- 0
     totalintersect <- 0
     for(k in all.keywords()) {
-        if(verbosity>=3) cat("splitAmbiguousKeywords for", k, "\n")
         rk <- related.keywords(k, threshold=relkeyAmbig)
+        if(verbosity>=3) cat("splitAmbiguousKeywords for", k, " [ number of related keywords =", length(rk), "]\n")
         clusters <- quick.clustering(rk)
         if(length(clusters) > 1) {
             if(verbosity>=3) cat("intersect clustering: #clusters =", length(clusters), "\n")
@@ -413,8 +414,8 @@ klink2 <- function(inputfile) {
         # set to true only if there was splitting / merging done
         continue <<- FALSE
         for(k in all.keywords()) {
-            if(verbosity>=3) cat("Infering keyword:", k, "\n")
-            rk <- related.keywords(k)
+            rk <- related.keywords(k, relkeyT)
+            if(verbosity>=3) cat("Infering keyword:", k, " [ number of related keywords =", length(rk), "]\n")
             for(k2 in rk) {
                 infer(k, keyword.name(k2))
             }
