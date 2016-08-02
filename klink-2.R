@@ -401,6 +401,19 @@ update.caches <- function() {
     cached.names <<- NULL
 }
 
+# save semantic relations stored in semrel data structure to triples data structure
+# to be used in the end of the run
+save.semrel <- function() {
+    if(verbosity>=2) cat("Saving semantic relations.\n")
+    for(i in 1:3) {
+        semmatrix <- get.semantic(i)
+        triples <<- rbind(triples, data.frame(list(
+            k1=unlist(vapply(semmatrix[, 1], keyword.name, ""), use.names=FALSE),
+            k2=unlist(vapply(semmatrix[, 2], keyword.name, ""), use.names=FALSE),
+            relation=rep(i, nrow(semmatrix))), stringsAsFactors=FALSE))
+    }
+}
+
 klink2 <- function(inputfile) {
     # ensure correctness of global variables
     prepare.globals(inputfile)
@@ -433,6 +446,7 @@ klink2 <- function(inputfile) {
         split_merge = !split_merge
         iter = iter + 1
     }
+    save.semrel()
     academic()
 
     rm('reldb_df', 'reldb_l', 'keywordsdb', 'inputm', envir=globalenv())
