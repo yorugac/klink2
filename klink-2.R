@@ -405,6 +405,7 @@ update.caches <- function() {
 # to be used in the end of the run
 save.semrel <- function() {
     if(verbosity>=2) cat("Saving semantic relations.\n")
+    cleanup.semrel()
     for(i in 1:3) {
         semmatrix <- get.semantic(i)
         triples <<- rbind(triples, data.frame(list(
